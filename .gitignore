@@ -1,0 +1,18 @@
+# deps
+node_modules/
+# next
+.next/
+out/
+next-env.d.ts
+tsconfig.tsbuildinfo
+# env & secrets — ⚠️ عمره ما يتّرفع
+.env
+.env.local
+.env.production
+.env*.local
+# logs & misc
+*.log
+.DS_Store
+# ملفات محلية
+pgdata/
+scratchpad/

@@ -1,0 +1,41 @@
+# ============================================================
+#  Tewsal — النشر على Coolify
+# ------------------------------------------------------------
+#  Coolify بينشر الملف ده كمورد واحد.
+#  Postgres و Redis بيتعملوا من واجهة Coolify (مورد منفصل)
+#  عشان النسخ الاحتياطي المجدول بتاعه يشتغل عليهم.
+#
+#  ⚠️ الـ migrations بتتنفذ **قبل** النشر من أمر pre-deploy
+#     في Coolify:  npm run db:migrate
+#     (مش من داخل التطبيق — نسختين هيتسابقوا).
+#
+#  ⚠️ خدمتَي worker (المهام الثقيلة) و pdf (توليد PDF بـ Chromium)
+#     لسه مش متبنيين — هيتضافوا هنا لما يخلصوا. دلوقتي التطبيق
+#     بيشتغل لوحده كفاية للتشغيل الأساسي.
+# ============================================================
+services:
+  app:
+    build:
+      context: .
+      target: runner
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      TZ: Africa/Cairo
+      DATABASE_URL: ${DATABASE_URL}
+      SESSION_SECRET: ${SESSION_SECRET}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      APP_URL: ${APP_URL:-https://app.tewsal.online}
+      # اختياري — التخزين والإشعارات (لما نفعّلهم)
+      R2_ACCOUNT_ID: ${R2_ACCOUNT_ID:-}
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-}
+      R2_BUCKET: ${R2_BUCKET:-tewsal}
+      WHATSAPP_TOKEN: ${WHATSAPP_TOKEN:-}
+      WHATSAPP_PHONE_ID: ${WHATSAPP_PHONE_ID:-}
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 25s
