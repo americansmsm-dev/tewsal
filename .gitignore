@@ -16,3 +16,4 @@ tsconfig.tsbuildinfo
 # ملفات محلية
 pgdata/
 scratchpad/
+backups/

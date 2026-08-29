@@ -17,6 +17,8 @@
     "db:studio": "drizzle-kit studio",
     "db:seed": "tsx scripts/seed.ts",
     "invariants": "tsx scripts/invariants.ts",
+    "daily-report": "tsx scripts/daily-report.ts",
+    "backup": "tsx scripts/backup.ts",
     "verify:ledger": "tsx scripts/verify-ledger.ts",
     "verify:transition": "tsx scripts/verify-transition.ts",
     "verify:api": "tsx scripts/verify-api.ts",
