@@ -22,6 +22,10 @@
     "verify:api": "tsx scripts/verify-api.ts",
     "verify:shipment-api": "tsx scripts/verify-shipment-api.ts",
     "verify:settlement-api": "tsx scripts/verify-settlement-api.ts",
+    "verify:aging": "tsx scripts/verify-aging.ts",
+    "verify:runsheet": "tsx scripts/verify-runsheet.ts",
+    "verify:claim": "tsx scripts/verify-claim.ts",
+    "verify:scan": "tsx scripts/verify-scan.ts",
     "reset-admin": "tsx scripts/reset-admin.ts",
     "db:migrate:prod": "node --experimental-strip-types scripts/migrate.ts"
   },

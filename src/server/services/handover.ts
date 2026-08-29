@@ -93,6 +93,15 @@ export async function recordHandover(
     UPDATE cash_handovers SET journal_entry_id = ${posted.entryId}::uuid WHERE id = ${ho.id}::uuid
   `);
 
+  // ⚠️ عجز → خصم مستحق على المندوب (متابعة عمليات فوق قيد الذمم)
+  if (variance < 0n) {
+    await ex.execute(sql`
+      INSERT INTO courier_deductions (courier_id, source_handover_id, amount_p, reason_ar, status)
+      VALUES (${input.courierId}::uuid, ${ho.id}::uuid, ${(-variance).toString()}::bigint,
+              ${input.varianceNote ?? "عجز في تسليم العهدة"}, 'pending')
+    `);
+  }
+
   // ⚠️ تسليم العهدة بيأكّد كاش المناديب → لازم نعيد حساب أرصدة
   //    التجار المتأثرين (اللي كانت شحناتهم تحت التحصيل عند ده)
   for (const merchantId of merchantsBefore) {

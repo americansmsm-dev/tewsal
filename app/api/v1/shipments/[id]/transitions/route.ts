@@ -18,6 +18,7 @@
  * ============================================================
  */
 import { type NextRequest } from "next/server";
+import { sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/server/db";
 import { poundsToPiastres } from "@/lib/money";
@@ -25,9 +26,16 @@ import { SHIPMENT_STATUSES } from "@/server/domain/statusMachine";
 import { applyTransition, type TransitionInput } from "@/server/services/transition";
 import type { Role } from "@/server/domain/statusMachine";
 import { buildTransitionFinancialEntry } from "@/server/services/shipmentFinancials";
+import { openClaim } from "@/server/services/claim";
 import { requireUser } from "@/server/http/context";
 import { ok, fail, handleError, forbidden } from "@/server/http/respond";
 import type { UserRole } from "@/server/db/schema/identity";
+
+/** كود المطالبة CLM-YYYY-NNNNNN */
+function claimCode(seq: string): string {
+  const year = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo", year: "numeric" }).format(new Date());
+  return `CLM-${year}-${seq.padStart(6, "0")}`;
+}
 
 export const dynamic = "force-dynamic";
 
@@ -116,7 +124,7 @@ export async function POST(
       // البوابة الوحيدة — بتنده بنّاء القيد المالي **بعد** ما
       // تتأكد إن التحول مسموح، عشان الممنوع يرجّع NOT_ALLOWED
       // مش خطأ بناء قيد.
-      return applyTransition(tx, {
+      const res = await applyTransition(tx, {
         shipmentId,
         to: b.to as TransitionInput["to"],
         actor: { userId: ctx.user.userId, role, name: ctx.user.fullName },
@@ -149,20 +157,32 @@ export async function POST(
         userAgent: ctx.userAgent,
         requestId: ctx.requestId,
       });
+
+      // ⚠️ مفقود/تالف بيفتح مطالبة تلقائيًا (بدون قيد فوري) —
+      //    جوه نفس الترانزاكشن، والبوابة نفسها مش بتتلمس.
+      let claimId: string | null = null;
+      if (!res.idempotentReplay && (b.to === "lost" || b.to === "damaged")) {
+        const seqR = await tx.execute(sql`SELECT nextval('awb_sequence')::text AS n`);
+        const n = (Array.isArray(seqR) ? seqR : (seqR as { rows: { n: string }[] }).rows)[0] as { n: string };
+        const claim = await openClaim(tx, { shipmentId, code: claimCode(n.n), actorUserId: ctx.user.userId });
+        claimId = claim.claimId;
+      }
+      return { res, claimId };
     });
 
     return ok(
       {
-        shipmentId: result.shipmentId,
-        awb: result.awb,
-        from: result.fromStatus,
-        to: result.toStatus,
-        version: result.version,
-        journalEntryNo: result.journalEntryNo?.toString() ?? null,
-        promisedAt: result.promisedAt?.toISOString() ?? null,
-        idempotentReplay: result.idempotentReplay,
+        shipmentId: result.res.shipmentId,
+        awb: result.res.awb,
+        from: result.res.fromStatus,
+        to: result.res.toStatus,
+        version: result.res.version,
+        journalEntryNo: result.res.journalEntryNo?.toString() ?? null,
+        promisedAt: result.res.promisedAt?.toISOString() ?? null,
+        idempotentReplay: result.res.idempotentReplay,
+        claimId: result.claimId,
       },
-      result.idempotentReplay ? 200 : 201
+      result.res.idempotentReplay ? 200 : 201
     );
   } catch (err) {
     return handleError(err);

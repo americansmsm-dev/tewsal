@@ -181,7 +181,7 @@ export async function postEntry(
           ${draft.sourceId}::uuid,
           ${draft.kind},
           ${opts.actorUserId ?? null}::uuid,
-          ${opts.entryDate ?? sql`now()`},
+          ${opts.entryDate ? opts.entryDate.toISOString() : sql`now()`},
           ${draft.kind.endsWith("_reversal")},
           ${draft.kind.endsWith("_reversal") ? draft.descriptionAr : null}
         )
