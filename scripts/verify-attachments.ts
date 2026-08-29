@@ -86,6 +86,21 @@ async function main() {
     const delivered = await tr({ to: "delivered", expectedCourierId: COURIER, cod: { collected: "500", method: "cash" }, photoUrl: podKey, signatureUrl: sigKey });
     check("٦) التسليم بصورة وتوقيع نجح", delivered.status, 201);
 
+    // ─── ٥) رفع صورة عبر السيرفر (بدون CORS) ───
+    async function uploadImg(kind: string) {
+      const res = await fetch(`${BASE}/api/v1/shipments/${shipId}/attachments/upload?kind=${kind}`, {
+        method: "POST", headers: { "content-type": "image/jpeg", ...(cookie ? { cookie } : {}) },
+        body: new Uint8Array([255, 216, 255, 0, 1, 2, 3]),
+      });
+      return { status: res.status, json: await res.json().catch(() => ({})) };
+    }
+    if (r2) {
+      check("٧) رفع صورة عبر السيرفر → 201 (R2 متضبط)", (await uploadImg("pod_photo")).status, 201);
+    } else {
+      check("٧) رفع صورة → 503 بوضوح (R2 مش متضبط)", (await uploadImg("pod_photo")).status, 503);
+    }
+    check("   رفع بنوع مجهول → مرفوض 400", (await uploadImg("nope")).status, 400);
+
     const [counts] = await sql<{ pod: string; sig: string }[]>`
       SELECT
         COUNT(*) FILTER (WHERE kind='pod_photo')::text AS pod,

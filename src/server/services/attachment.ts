@@ -15,6 +15,7 @@ import {
   isR2Configured,
   presignPut,
   presignGet,
+  putObject,
   buildKey,
   extForContentType,
   ATTACHMENT_KINDS,
@@ -54,6 +55,34 @@ export async function presignUpload(
   const key = buildKey(input.shipmentId, input.kind, ext);
   const uploadUrl = await presignPut(key, input.contentType);
   return { uploadUrl, key, expiresInSec: 300 };
+}
+
+/** الحد الأقصى لحجم صورة الإثبات (٦ ميجا) */
+const MAX_UPLOAD_BYTES = 6 * 1024 * 1024;
+
+/**
+ * رفع صورة إثبات عبر السيرفر (المندوب بيبعت الصورة للـ API،
+ * والسيرفر يرفعها لـ R2). مفيش CORS، بيشتغل فورًا.
+ */
+export async function uploadAttachment(
+  ex: SqlExecutor,
+  input: { shipmentId: string; kind: string; contentType: string; bytes: Uint8Array; actorUserId: string | null }
+): Promise<{ attachmentId: string; key: string }> {
+  if (!KINDS.has(input.kind)) throw new HttpError(400, "BAD_KIND", "نوع المرفق مش معروف");
+  const ext = extForContentType(input.contentType);
+  if (!ext) throw new HttpError(400, "BAD_TYPE", "نوع الملف لازم يكون صورة (jpg/png/webp)");
+  if (input.bytes.byteLength === 0) throw new HttpError(400, "EMPTY", "الملف فاضي");
+  if (input.bytes.byteLength > MAX_UPLOAD_BYTES) throw new HttpError(413, "TOO_LARGE", "الصورة أكبر من ٦ ميجا");
+  if (!isR2Configured()) throw new HttpError(503, "R2_NOT_CONFIGURED", "تخزين الصور (R2) مش متضبط لسه");
+  await assertShipment(ex, input.shipmentId);
+
+  const key = buildKey(input.shipmentId, input.kind, ext);
+  await putObject(key, input.bytes, input.contentType);
+  const rec = await recordAttachment(ex, {
+    shipmentId: input.shipmentId, kind: input.kind, r2Key: key,
+    sizeBytes: input.bytes.byteLength, actorUserId: input.actorUserId,
+  });
+  return { attachmentId: rec.attachmentId, key };
 }
 
 /** تسجيل مرفق بعد رفعه (أو ربط مفتاح من التحول). آمن للتكرار على نفس المفتاح. */

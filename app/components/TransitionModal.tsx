@@ -5,13 +5,18 @@
  * وتعرض الحقول المطلوبة بس: مبلغ التحصيل، سبب التعذّر، ملاحظة،
  * أو اختيار مندوب. بتنده POST /shipments/:id/transitions.
  */
-import { useEffect, useState } from "react";
-import { apiCall, type ShipmentStatus } from "../lib/client";
+import { useEffect, useRef, useState } from "react";
+import { apiCall, uploadProof, type ShipmentStatus } from "../lib/client";
 import {
   STATUS_LABELS_AR,
   allowedTransitions,
   type Role,
 } from "@/server/domain/statusMachine";
+
+/** الحالات اللي بيظهر معاها زر صورة الإثبات */
+const PHOTO_STATES = new Set<ShipmentStatus>([
+  "delivered", "partially_delivered", "delivery_failed", "damaged", "returned_to_merchant",
+]);
 
 interface Courier {
   id: string;
@@ -54,8 +59,32 @@ export function TransitionModal({
   const [courierId, setCourierId] = useState("");
   const [receiverName, setReceiverName] = useState("");
 
+  // صورة الإثبات
+  const [photoKey, setPhotoKey] = useState<string | null>(null);
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const [photoErr, setPhotoErr] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
   const chosen = options.find((o) => o.to === toStatus);
   const requires = chosen?.requires ?? [];
+  const showPhoto = !!toStatus && PHOTO_STATES.has(toStatus as ShipmentStatus);
+
+  async function onPickPhoto(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setPhotoErr(null);
+    setPhotoBusy(true);
+    try {
+      const kind = toStatus === "damaged" ? "damage" : "pod_photo";
+      const key = await uploadProof(shipmentId, kind, file);
+      setPhotoKey(key);
+    } catch (err) {
+      setPhotoErr(err instanceof Error ? err.message : "فشل رفع الصورة");
+    } finally {
+      setPhotoBusy(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  }
 
   useEffect(() => {
     apiCall<{ couriers: Courier[] }>("GET", "/api/v1/couriers").then((r) =>
@@ -84,7 +113,10 @@ export function TransitionModal({
     } else if (currentCourierId && requires.includes("cod_amount")) {
       body.expectedCourierId = currentCourierId;
     }
-    if (requires.includes("signature")) body.signatureUrl = "pending://signature";
+    // صورة الإثبات لو المندوب صوّرها (بتتربط بالشحنة كمرفق)
+    if (photoKey) body.photoUrl = photoKey;
+    // التوقيع: لو فيه صورة إثبات نستخدمها، وإلا مؤقت لحد ما نعمل لوحة توقيع
+    if (requires.includes("signature")) body.signatureUrl = photoKey ?? "pending://signature";
 
     const r = await apiCall(`POST`, `/api/v1/shipments/${shipmentId}/transitions`, body);
     setBusy(false);
@@ -184,6 +216,38 @@ export function TransitionModal({
               </option>
             ))}
           </select>
+        </div>
+      )}
+
+      {showPhoto && (
+        <div style={{ marginBottom: "0.9rem" }}>
+          <label className="label">صورة إثبات {requires.includes("signature") ? "" : "(اختياري)"}</label>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            onChange={onPickPhoto}
+            style={{ display: "none" }}
+          />
+          {photoKey ? (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "0.6rem 0.8rem", borderRadius: 12, background: "#16a34a18", border: "1px solid #16a34a33" }}>
+              <span style={{ fontSize: "1.2rem" }}>✅</span>
+              <span style={{ flex: 1, fontSize: "0.85rem", fontWeight: 600, color: "var(--color-success)" }}>الصورة اترفعت</span>
+              <button className="btn btn-ghost" style={{ padding: "0.3rem 0.7rem", fontSize: "0.78rem" }} onClick={() => { setPhotoKey(null); fileRef.current?.click(); }}>تغيير</button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              className="btn btn-ghost"
+              style={{ width: "100%", padding: "0.75rem", fontSize: "0.9rem", borderStyle: "dashed" }}
+              disabled={photoBusy}
+              onClick={() => fileRef.current?.click()}
+            >
+              {photoBusy ? "جاري الرفع..." : "📷 التقاط صورة"}
+            </button>
+          )}
+          {photoErr && <div style={{ marginTop: 6, fontSize: "0.78rem", color: "var(--muted)" }}>⚠️ {photoErr} — تقدر تكمّل التسليم من غير صورة</div>}
         </div>
       )}
 

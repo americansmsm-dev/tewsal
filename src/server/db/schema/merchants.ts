@@ -15,10 +15,14 @@ import {
   uuid,
   text,
   boolean,
+  bigint,
+  integer,
+  numeric,
   timestamp,
   index,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { users } from "./identity";
 
 export const merchants = pgTable(
@@ -39,6 +43,19 @@ export const merchants = pgTable(
     defaultShippingPayer: text("default_shipping_payer").notNull().default("merchant"),
     isActive: boolean("is_active").notNull().default(true),
     notes: text("notes"),
+    // --- CRM (مرحلة ج) ---
+    /** موظف المبيعات المسؤول */
+    salesRepId: uuid("sales_rep_id").references(() => users.id, { onDelete: "set null" }),
+    /** موظف خدمة العملاء المسؤول */
+    csRepId: uuid("cs_rep_id").references(() => users.id, { onDelete: "set null" }),
+    /** نوعية المنتجات (ملابس، إلكترونيات...) */
+    productType: text("product_type"),
+    /** أقصى وزن مسموح بدون رسم زيادة */
+    allowedWeightKg: numeric("allowed_weight_kg", { precision: 6, scale: 2 }),
+    /** رصيد نقاط الولاء */
+    points: bigint("points", { mode: "bigint" }).notNull().default(sql`0`),
+    /** رصيد الفلايرز (بوالص فارغة) */
+    flyerBalance: integer("flyer_balance").notNull().default(0),
     createdByUserId: uuid("created_by_user_id").references(() => users.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

@@ -84,3 +84,18 @@ export async function presignGet(key: string): Promise<string> {
   const cmd = new GetObjectCommand({ Bucket: process.env.R2_BUCKET!, Key: key });
   return getSignedUrl(client(), cmd, { expiresIn: 900 });
 }
+
+/**
+ * رفع ملف لـ R2 **من السيرفر مباشرة** (مش عبر المتصفح) —
+ * كده مفيش حاجة اسمها CORS، والرفع بيشتغل فورًا. مناسب لصور
+ * الإثبات الصغيرة اللي المندوب بيرفعها عبر الـ API.
+ */
+export async function putObject(key: string, body: Uint8Array, contentType: string): Promise<void> {
+  const cmd = new PutObjectCommand({
+    Bucket: process.env.R2_BUCKET!,
+    Key: key,
+    Body: body,
+    ContentType: contentType,
+  });
+  await client().send(cmd);
+}

@@ -37,16 +37,39 @@ export function CreateShipmentModal({
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<{ awb: string; price: string; totalFees: string } | null>(null);
 
+  const [showMore, setShowMore] = useState(false);
+  const [lookup, setLookup] = useState<{ blacklisted: boolean; blacklistReason: string | null; total: number; successRate: number; lastNames: string[] } | null>(null);
   const [f, setF] = useState({
     merchantId: lockedMerchantId ?? "",
     recipientName: "",
     recipientPhone: "",
+    recipientPhoneAlt: "",
     governorateId: "",
     addressLine: "",
+    landmark: "",
     codAmount: "",
     paymentMethod: "cash",
+    declaredValue: "",
+    piecesCount: "1",
+    weightKg: "",
+    serviceType: "deliver",
+    merchantReference: "",
+    notesToCourier: "",
+    isFragile: false,
+    fragileInsured: false,
     confirm: true,
   });
+
+  // لوك-أب العميل الحي — تاريخه + القائمة السوداء
+  useEffect(() => {
+    const p = f.recipientPhone.replace(/\D/g, "");
+    if (p.length < 11) { setLookup(null); return; }
+    const t = setTimeout(() => {
+      apiCall<typeof lookup>("GET", `/api/v1/customers/lookup?phone=${encodeURIComponent(f.recipientPhone)}`)
+        .then((r) => { if (r.ok) setLookup(r.data); });
+    }, 400);
+    return () => clearTimeout(t);
+  }, [f.recipientPhone]);
 
   useEffect(() => {
     if (!lockedMerchantId) {
@@ -76,6 +99,15 @@ export function CreateShipmentModal({
       confirm: f.confirm,
     };
     if (f.codAmount) body.codAmount = f.codAmount;
+    if (f.recipientPhoneAlt) body.recipientPhoneAlt = f.recipientPhoneAlt;
+    if (f.landmark) body.landmark = f.landmark;
+    if (f.declaredValue) body.declaredValue = f.declaredValue;
+    if (f.piecesCount && f.piecesCount !== "1") body.piecesCount = Number(f.piecesCount);
+    if (f.weightKg) body.weightKg = Number(f.weightKg);
+    if (f.serviceType !== "deliver") body.serviceType = f.serviceType;
+    if (f.merchantReference) body.merchantReference = f.merchantReference;
+    if (f.notesToCourier) body.notesToCourier = f.notesToCourier;
+    if (f.isFragile) { body.isFragile = true; body.fragileInsured = f.fragileInsured; }
     const r = await apiCall<{ awb: string; price: string; totalFees: string }>(
       "POST",
       "/api/v1/shipments",
@@ -161,6 +193,19 @@ export function CreateShipmentModal({
         </div>
       </div>
 
+      {lookup && lookup.total > 0 && (
+        <div style={{
+          marginBottom: "0.8rem", padding: "0.55rem 0.8rem", borderRadius: 10, fontSize: "0.8rem", fontWeight: 600,
+          background: lookup.blacklisted ? "#dc262618" : "var(--bg-soft)",
+          color: lookup.blacklisted ? "var(--color-danger)" : "var(--muted)",
+          border: lookup.blacklisted ? "1px solid #dc262633" : "1px solid var(--border)",
+        }}>
+          {lookup.blacklisted
+            ? <>⛔ العميل في القائمة السوداء — {lookup.blacklistReason}</>
+            : <>ℹ️ العميل عنده {lookup.total} شحنة · نسبة نجاح {lookup.successRate}%{lookup.lastNames[0] && !f.recipientName ? <> · <button type="button" onClick={() => set("recipientName", lookup.lastNames[0]!)} style={{ background: "none", border: "none", color: "var(--color-orange-600)", cursor: "pointer", fontWeight: 700, padding: 0 }}>استخدم «{lookup.lastNames[0]}»</button></> : null}</>}
+        </div>
+      )}
+
       <label className="label">المحافظة</label>
       <select
         className="input"
@@ -210,6 +255,66 @@ export function CreateShipmentModal({
         </div>
       </div>
 
+      <button type="button" onClick={() => setShowMore((s) => !s)} className="btn btn-ghost" style={{ width: "100%", marginBottom: "0.8rem", fontSize: "0.85rem", justifyContent: "center" }}>
+        {showMore ? "▲ إخفاء الخيارات الإضافية" : "▼ خيارات إضافية (وزن، قطع، قابل للكسر، رقم طلب...)"}
+      </button>
+
+      {showMore && (
+        <div style={{ padding: "0.9rem", background: "var(--bg-soft)", borderRadius: 12, marginBottom: "0.9rem", display: "grid", gap: "0.7rem" }}>
+          <div style={{ display: "flex", gap: 8 }}>
+            <div style={{ flex: 1 }}>
+              <label className="label">موبايل احتياطي</label>
+              <input className="input" value={f.recipientPhoneAlt} onChange={(e) => set("recipientPhoneAlt", e.target.value)} dir="ltr" style={{ textAlign: "right" }} placeholder="01xxxxxxxxx" />
+            </div>
+            <div style={{ flex: 1 }}>
+              <label className="label">علامة مميزة</label>
+              <input className="input" value={f.landmark} onChange={(e) => set("landmark", e.target.value)} placeholder="جنب..." />
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <div style={{ flex: 1 }}>
+              <label className="label">عدد القطع</label>
+              <input className="input" value={f.piecesCount} onChange={(e) => set("piecesCount", e.target.value)} inputMode="numeric" dir="ltr" style={{ textAlign: "right" }} />
+            </div>
+            <div style={{ flex: 1 }}>
+              <label className="label">الوزن (كجم)</label>
+              <input className="input" value={f.weightKg} onChange={(e) => set("weightKg", e.target.value)} inputMode="decimal" dir="ltr" style={{ textAlign: "right" }} placeholder="—" />
+            </div>
+            <div style={{ flex: 1 }}>
+              <label className="label">القيمة المعلنة</label>
+              <input className="input" value={f.declaredValue} onChange={(e) => set("declaredValue", e.target.value)} inputMode="decimal" dir="ltr" style={{ textAlign: "right" }} placeholder="—" />
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <div style={{ flex: 1 }}>
+              <label className="label">نوع الخدمة</label>
+              <select className="input" value={f.serviceType} onChange={(e) => set("serviceType", e.target.value)}>
+                <option value="deliver">توصيل</option>
+                <option value="exchange">استبدال</option>
+                <option value="cash_collection">تحصيل فقط</option>
+              </select>
+            </div>
+            <div style={{ flex: 1 }}>
+              <label className="label">رقم الطلب عندك</label>
+              <input className="input" value={f.merchantReference} onChange={(e) => set("merchantReference", e.target.value)} placeholder="اختياري" />
+            </div>
+          </div>
+          <div>
+            <label className="label">ملاحظة للمندوب</label>
+            <input className="input" value={f.notesToCourier} onChange={(e) => set("notesToCourier", e.target.value)} placeholder="اختياري" />
+          </div>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "0.85rem" }}>
+            <input type="checkbox" checked={f.isFragile} onChange={(e) => set("isFragile", e.target.checked)} />
+            قابل للكسر
+            {f.isFragile && (
+              <label style={{ display: "flex", alignItems: "center", gap: 6, marginInlineStart: 12, color: "var(--muted)" }}>
+                <input type="checkbox" checked={f.fragileInsured} onChange={(e) => set("fragileInsured", e.target.checked)} /> مؤمّن
+              </label>
+            )}
+          </label>
+        </div>
+      )}
+
       <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: "1rem", fontSize: "0.85rem" }}>
         <input type="checkbox" checked={f.confirm} onChange={(e) => set("confirm", e.target.checked)} />
         تأكيد فوري (جاهزة للاستلام)
@@ -221,7 +326,7 @@ export function CreateShipmentModal({
         <button
           className="btn btn-primary"
           style={{ flex: 1 }}
-          disabled={busy || !f.merchantId || !f.recipientName || !f.recipientPhone || !f.governorateId || !f.addressLine}
+          disabled={busy || !f.merchantId || !f.recipientName || !f.recipientPhone || !f.governorateId || !f.addressLine || !!lookup?.blacklisted}
           onClick={submit}
         >
           {busy ? "جاري الإنشاء..." : "إنشاء الشحنة"}

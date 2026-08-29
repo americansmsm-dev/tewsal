@@ -30,6 +30,7 @@ import {
 import type { MerchantTier } from "../db/schema/pricing";
 import { applyTransition, type Actor } from "./transition";
 import { buildTransitionFinancialEntry } from "./shipmentFinancials";
+import { isBlacklisted } from "./crm";
 import type { SqlExecutor } from "./ledger";
 import { HttpError } from "../http/respond";
 
@@ -141,6 +142,10 @@ export async function createShipment(
 
   const recipientPhone = normalizeEgyptMobile(input.recipientPhone);
   if (!recipientPhone) throw new HttpError(400, "BAD_PHONE", "رقم المستلم غير صالح");
+  // ⚠️ العميل في القائمة السوداء (رفض متكرر) → منع الشحنة
+  if (await isBlacklisted(ex, recipientPhone)) {
+    throw new HttpError(422, "RECIPIENT_BLACKLISTED", "رقم المستلم في القائمة السوداء — راجع خدمة العملاء");
+  }
 
   // ═══ ٥) حساب السعر والرسوم ═══
   const [priceList, priceOverrides, feeDefs, feeOverrides] = await Promise.all([

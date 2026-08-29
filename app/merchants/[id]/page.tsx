@@ -11,6 +11,7 @@ import { AppHeader } from "../../components/AppHeader";
 import { AppNav } from "../../components/AppNav";
 import { useCurrentUser } from "../../lib/useCurrentUser";
 import { apiCall } from "../../lib/client";
+import { MerchantCrmPanel } from "../../components/MerchantCrmPanel";
 import { STATUS_LABELS_AR } from "@/server/domain/statusMachine";
 
 interface Line {
@@ -121,6 +122,8 @@ export default function MerchantStatementPage() {
             )}
           </div>
         )}
+
+        {canSettle && <MerchantCrmPanel merchantId={merchantId} />}
 
         {/* الحركات */}
         <div className="card" style={{ overflow: "auto" }}>

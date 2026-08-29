@@ -56,6 +56,35 @@ export async function apiCall<T = unknown>(
 }
 
 // ---------------------------------------------------------------
+// رفع صور الإثبات على R2 (رفع مباشر عبر presigned PUT)
+// ---------------------------------------------------------------
+
+/**
+ * يرفع صورة إثبات لشحنة: يطلب رابط مؤقت من السيرفر، يرفع الصورة
+ * **مباشرة** لـ R2، ثم يسجّل المفتاح. بيرجّع مفتاح R2 (r2Key)
+ * اللي بيتبعت مع التحول كـ photoUrl/signatureUrl.
+ *
+ * بيرمي خطأ برسالة عربية لو R2 مش متضبط أو الرفع فشل — الواجهة
+ * بتتعامل معاها (التسليم نفسه ممكن يكمّل من غير صورة).
+ */
+export async function uploadProof(
+  shipmentId: string,
+  kind: string,
+  file: File
+): Promise<string> {
+  // رفع عبر السيرفر (السيرفر يرفع لـ R2) — مفيش CORS، بيشتغل فورًا
+  const res = await fetch(
+    `/api/v1/shipments/${shipmentId}/attachments/upload?kind=${encodeURIComponent(kind)}`,
+    { method: "POST", headers: { "content-type": file.type }, body: file, credentials: "same-origin" }
+  );
+  const json = await res.json().catch(() => null);
+  if (!res.ok || !json?.key) {
+    throw new Error((json as { error?: { message?: string } })?.error?.message ?? "تخزين الصور مش متاح دلوقتي");
+  }
+  return json.key as string;
+}
+
+// ---------------------------------------------------------------
 // ألوان الحالات — للـ badge
 // ---------------------------------------------------------------
 
