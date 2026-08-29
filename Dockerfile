@@ -10,7 +10,9 @@ WORKDIR /app
 RUN apk add --no-cache libc6-compat
 COPY package.json package-lock.json* ./
 RUN npm ci --omit=dev --ignore-scripts && cp -R node_modules /prod_modules
-RUN npm ci --ignore-scripts
+# ⚠️ --include=dev إجباري: البناء (next/tailwind/typescript) محتاج devDependencies
+#    حتى لو NODE_ENV=production اتحقن من منصة النشر (Coolify بيحقنها)
+RUN npm ci --include=dev --ignore-scripts
 
 # ---------- المرحلة ٢: البناء ----------
 FROM node:22-alpine AS builder
