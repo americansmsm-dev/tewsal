@@ -7,6 +7,7 @@
  */
 import { useEffect, useRef, useState } from "react";
 import { apiCall, uploadProof, type ShipmentStatus } from "../lib/client";
+import { queueTransition } from "../lib/outbox";
 import {
   STATUS_LABELS_AR,
   allowedTransitions,
@@ -117,13 +118,19 @@ export function TransitionModal({
     if (photoKey) body.photoUrl = photoKey;
     // التوقيع: لو فيه صورة إثبات نستخدمها، وإلا مؤقت لحد ما نعمل لوحة توقيع
     if (requires.includes("signature")) body.signatureUrl = photoKey ?? "pending://signature";
+    // idempotency — نفس الحدث مش هيتكرر حتى لو اتزامن أكتر من مرة
+    body.deviceEventId = crypto.randomUUID();
 
-    const r = await apiCall(`POST`, `/api/v1/shipments/${shipmentId}/transitions`, body);
-    setBusy(false);
-    if (r.ok) {
+    try {
+      const r = await apiCall(`POST`, `/api/v1/shipments/${shipmentId}/transitions`, body);
+      setBusy(false);
+      if (r.ok) onDone();
+      else setError(r.error?.message ?? "فشل الإجراء");
+    } catch {
+      // النت مقطوع — نخزّن التحول ويتزامن لما النت يرجع
+      queueTransition(shipmentId, body);
+      setBusy(false);
       onDone();
-    } else {
-      setError(r.error?.message ?? "فشل الإجراء");
     }
   }
 

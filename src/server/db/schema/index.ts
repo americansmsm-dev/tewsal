@@ -18,3 +18,4 @@ export * from "./warehouse";
 export * from "./fulfillment";
 export * from "./integrations";
 export * from "./notifications";
+export * from "./field";
