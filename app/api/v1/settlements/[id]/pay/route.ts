@@ -7,11 +7,10 @@ import { z } from "zod";
 import { db } from "@/server/db";
 import { poundsToPiastres } from "@/lib/money";
 import { paySettlement } from "@/server/services/settlement";
-import { requireRole } from "@/server/http/context";
+import { requirePermission } from "@/server/http/context";
 import { ok, fail, handleError } from "@/server/http/respond";
 
 export const dynamic = "force-dynamic";
-const FINANCE = ["super_admin", "branch_manager", "accountant"] as const;
 
 const paySchema = z.object({
   method: z.enum(["bank", "vodafone_cash", "instapay", "cash"]),
@@ -25,7 +24,7 @@ const paySchema = z.object({
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const ctx = await requireRole(req, FINANCE);
+    const ctx = await requirePermission(req, "settlement.pay");
     const { id } = await params;
     if (!z.string().uuid().safeParse(id).success) return fail("BAD_REQUEST", "معرّف غير صالح", 400);
 

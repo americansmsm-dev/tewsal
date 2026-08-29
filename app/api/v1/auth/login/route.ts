@@ -17,6 +17,7 @@ import { z } from "zod";
 import { db } from "@/server/db";
 import { verifyPassword } from "@/server/auth/password";
 import { createSession, SESSION_COOKIE } from "@/server/auth/session";
+import { checkTwoFactorAtLogin } from "@/server/services/security";
 import { normalizeEgyptMobile } from "@/lib/phone";
 import { clientIp } from "@/server/http/context";
 import { ok, fail, handleError } from "@/server/http/respond";
@@ -29,6 +30,7 @@ const LOCK_MINUTES = 15;
 const bodySchema = z.object({
   username: z.string().min(1, "اكتب اسم المستخدم"),
   password: z.string().min(1, "اكتب كلمة المرور"),
+  code: z.string().max(6).optional(),
   deviceLabel: z.string().max(80).optional(),
 });
 
@@ -101,6 +103,13 @@ export async function POST(req: NextRequest) {
       `);
       await recordAttempt(false, "bad_password");
       return INVALID();
+    }
+
+    // ✅ الباسورد صح — نتحقق من المصادقة الثنائية لو مفعّلة
+    const twoFa = await checkTwoFactorAtLogin(db, { userId: user.id, code: parsed.data.code });
+    if (!twoFa.ok) {
+      await recordAttempt(false, twoFa.needs2fa && parsed.data.code ? "bad_2fa" : "needs_2fa");
+      return fail("NEEDS_2FA", parsed.data.code ? "كود المصادقة الثنائية غلط" : "محتاج كود المصادقة الثنائية", 401);
     }
 
     // ✅ نجح — نصفّر العداد ونعمل جلسة

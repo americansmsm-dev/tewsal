@@ -379,6 +379,14 @@ export const SEED_SETTINGS = [
     category: "notifications",
     valueType: "money",
   },
+  {
+    key: "emergency.freeze_settlements",
+    value: false,
+    nameAr: "وضع الطوارئ — تجميد دفع التسويات",
+    description: "لما يتفعّل، مفيش أي تسوية تتدفع لحد ما يتقفل",
+    category: "security",
+    valueType: "boolean",
+  },
   // --- الضرائب (قرار ٨ — مؤجّل) ---
   {
     key: "tax.vat_percent_bp",

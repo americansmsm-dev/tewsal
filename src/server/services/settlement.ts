@@ -259,6 +259,9 @@ export async function paySettlement(
     `)
   )[0];
   if (!s) throw new HttpError(404, "NOT_FOUND", "التسوية مش موجودة");
+  // ⚠️ وضع الطوارئ — تجميد كل الدفعات
+  const frozen = rowsOf<{ value: unknown }>(await ex.execute(sql`SELECT value FROM settings WHERE key = 'emergency.freeze_settlements' LIMIT 1`))[0]?.value;
+  if (frozen === true || frozen === "true") throw new HttpError(423, "FROZEN", "وضع الطوارئ مفعّل — الدفعات متجمّدة مؤقتًا");
   if (s.status === "paid") throw new HttpError(422, "ALREADY_PAID", "التسوية مدفوعة بالفعل");
   if (!s.approved_by) throw new HttpError(422, "NOT_APPROVED", "التسوية لازم تتعتمد الأول");
   if (s.requires_two_approvals && !s.second_approved_by) {

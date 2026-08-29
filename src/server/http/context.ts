@@ -9,6 +9,7 @@
 import type { NextRequest } from "next/server";
 import { db } from "../db";
 import { resolveSession, SESSION_COOKIE, type SessionUser } from "../auth/session";
+import { hasPermission, PERMISSION_LABELS_AR, type Permission } from "../domain/permissions";
 import { unauthorized, forbidden } from "./respond";
 
 export interface RequestContext {
@@ -60,6 +61,21 @@ export async function requireRole(
   const ctx = await requireUser(req);
   if (!roles.includes(ctx.user.role)) {
     throw forbidden(`الإجراء ده متاح لـ: ${roles.join("، ")}`);
+  }
+  return ctx;
+}
+
+/**
+ * التأكد إن المستخدم عنده صلاحية دقيقة معيّنة (فوق الدور).
+ * بيرمي 403 لو مسحوبة منه أو مش من صلاحيات دوره.
+ */
+export async function requirePermission(
+  req: NextRequest,
+  perm: Permission
+): Promise<RequestContext> {
+  const ctx = await requireUser(req);
+  if (!hasPermission(ctx.user, perm)) {
+    throw forbidden(`مالكش صلاحية «${PERMISSION_LABELS_AR[perm]}»`);
   }
   return ctx;
 }
