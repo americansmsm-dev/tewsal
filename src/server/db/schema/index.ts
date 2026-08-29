@@ -16,3 +16,4 @@ export * from "./crm";
 export * from "./ops";
 export * from "./warehouse";
 export * from "./fulfillment";
+export * from "./integrations";

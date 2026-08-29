@@ -29,6 +29,7 @@ import { buildTransitionFinancialEntry } from "@/server/services/shipmentFinanci
 import { openClaim } from "@/server/services/claim";
 import { enterReturns } from "@/server/services/returns";
 import { recordAttachment } from "@/server/services/attachment";
+import { fireWebhooks } from "@/server/services/apiAccess";
 import { requireUser } from "@/server/http/context";
 import { ok, fail, handleError, forbidden } from "@/server/http/respond";
 import type { UserRole } from "@/server/db/schema/identity";
@@ -189,6 +190,18 @@ export async function POST(
       }
       return { res, claimId };
     });
+
+    // إشعار ويب-هوك التاجر (best-effort، مش بيعطّل الرد ولا الترانزاكشن)
+    const NOTIFY = new Set(["picked_up", "out_for_delivery", "delivered", "partially_delivered", "delivery_failed", "returned_to_merchant"]);
+    if (!result.res.idempotentReplay && NOTIFY.has(b.to)) {
+      void (async () => {
+        try {
+          const m = await db.execute(sql`SELECT merchant_id::text AS mid FROM shipments WHERE id = ${shipmentId}::uuid`);
+          const mid = (Array.isArray(m) ? m : (m as { rows: { mid: string }[] }).rows)[0]?.mid as string | undefined;
+          if (mid) await fireWebhooks(db, { merchantId: mid, event: String(b.to), payload: { awb: result.res.awb, status: b.to, shipmentId } });
+        } catch { /* best-effort */ }
+      })();
+    }
 
     return ok(
       {

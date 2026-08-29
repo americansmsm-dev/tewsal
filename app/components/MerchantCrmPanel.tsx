@@ -30,15 +30,17 @@ export function MerchantCrmPanel({ merchantId }: { merchantId: string }) {
   const [d, setD] = useState<CrmData | null>(null);
   const [zones, setZones] = useState<Zone[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  const [integ, setInteg] = useState<{ tokens: Record<string, unknown>[]; webhooks: Record<string, unknown>[] } | null>(null);
   const [open, setOpen] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
   const loadProducts = useCallback(async () => { const r = await apiCall<{ products: Product[] }>("GET", `/api/v1/merchants/${merchantId}/products`); if (r.ok && r.data) setProducts(r.data.products); }, [merchantId]);
+  const loadInteg = useCallback(async () => { const r = await apiCall<{ tokens: Record<string, unknown>[]; webhooks: Record<string, unknown>[] }>("GET", `/api/v1/merchants/${merchantId}/integrations`); if (r.ok && r.data) setInteg(r.data); }, [merchantId]);
   const load = useCallback(async () => {
     const r = await apiCall<CrmData>("GET", `/api/v1/merchants/${merchantId}/crm`);
     if (r.ok) setD(r.data);
   }, [merchantId]);
-  useEffect(() => { if (open && !d) { load(); loadProducts(); apiCall<{ zones: Zone[] }>("GET", "/api/v1/geo/zones").then((r) => setZones(r.data?.zones ?? [])); } }, [open, d, load, loadProducts]);
+  useEffect(() => { if (open && !d) { load(); loadProducts(); loadInteg(); apiCall<{ zones: Zone[] }>("GET", "/api/v1/geo/zones").then((r) => setZones(r.data?.zones ?? [])); } }, [open, d, load, loadProducts, loadInteg]);
 
   async function stockAct(body: Record<string, unknown>, path: string, okMsg: string) {
     const r = await apiCall("POST", path, body);
@@ -128,6 +130,27 @@ export function MerchantCrmPanel({ merchantId }: { merchantId: string }) {
             <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
               <button className="btn btn-ghost" style={{ padding: "0.3rem 0.7rem", fontSize: "0.8rem" }} onClick={() => { const sku = window.prompt("SKU؟"); const nameAr = sku && window.prompt("اسم المنتج؟"); const q = nameAr && window.prompt("الكمية؟", "0"); if (sku && nameAr) stockAct({ sku, nameAr, quantity: Number(q) || 0 }, `/api/v1/merchants/${merchantId}/products`, "اتسجّل منتج"); }}>+ منتج</button>
               <button className="btn btn-ghost" style={{ padding: "0.3rem 0.7rem", fontSize: "0.8rem", color: "var(--color-orange-600)" }} onClick={() => { const amt = window.prompt("مبلغ رسم التخزين (ج)؟"); if (amt) apiCall("POST", `/api/v1/merchants/${merchantId}/storage-fee`, { amount: amt }).then((r) => { setMsg(r.ok ? "اتحاسب رسم تخزين" : (r.error?.message ?? "فشل")); setTimeout(() => setMsg(null), 2500); }); }}>رسم تخزين</button>
+            </div>
+          </Section>
+
+          {/* التكاملات — توكنات API + ويب-هوك */}
+          <Section title="التكاملات (API + ويب-هوك)">
+            {integ && integ.tokens.length > 0 && (
+              <div style={{ display: "grid", gap: 3, marginBottom: 6 }}>
+                {integ.tokens.map((t) => (
+                  <div key={t.id as string} style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8rem" }}>
+                    <span style={{ fontFamily: "monospace" }}>{t.prefix as string}… {(t.is_active as boolean) ? "" : "(موقوف)"}</span>
+                    {(t.is_active as boolean) && <button style={{ ...miniBtn, width: "auto", padding: "0 6px", color: "var(--color-danger)" }} onClick={() => apiCall("DELETE", `/api/v1/api-tokens/${t.id}`).then(loadInteg)}>إيقاف</button>}
+                  </div>
+                ))}
+              </div>
+            )}
+            {integ && integ.webhooks.length > 0 && integ.webhooks.map((w) => (
+              <div key={w.id as string} style={{ fontSize: "0.78rem", color: "var(--muted)", display: "flex", justifyContent: "space-between" }}><span>🔔 {w.url as string}</span><button style={{ ...miniBtn, width: "auto", padding: "0 6px", color: "var(--color-danger)" }} onClick={() => apiCall("DELETE", `/api/v1/webhooks/${w.id}`).then(loadInteg)}>حذف</button></div>
+            ))}
+            <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+              <button className="btn btn-ghost" style={{ padding: "0.3rem 0.7rem", fontSize: "0.8rem" }} onClick={() => { const name = window.prompt("اسم التوكن؟", "متجري"); if (name) apiCall<{ token: string }>("POST", `/api/v1/merchants/${merchantId}/integrations`, { action: "token", name }).then((r) => { if (r.ok && r.data) window.alert("التوكن (احفظه، مش هيتعرض تاني):\n\n" + r.data.token); loadInteg(); }); }}>+ توكن API</button>
+              <button className="btn btn-ghost" style={{ padding: "0.3rem 0.7rem", fontSize: "0.8rem" }} onClick={() => { const url = window.prompt("رابط الويب-هوك (https)?"); if (url) apiCall("POST", `/api/v1/merchants/${merchantId}/integrations`, { action: "webhook", url }).then((r) => { setMsg(r.ok ? "اتسجّل ويب-هوك" : (r.error?.message ?? "فشل")); loadInteg(); setTimeout(() => setMsg(null), 2500); }); }}>+ ويب-هوك</button>
             </div>
           </Section>
         </div>
