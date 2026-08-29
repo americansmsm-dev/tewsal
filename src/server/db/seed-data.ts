@@ -10,7 +10,7 @@
  *     عند تجهيز قاعدة بيانات جديدة.
  * ============================================================
  */
-import { poundsToPiastres } from "@/lib/money";
+import { poundsToPiastres } from "../../lib/money";
 
 const P = poundsToPiastres;
 

@@ -48,11 +48,15 @@ COPY --from=builder --chown=tewsal:nodejs /app/scripts ./scripts
 COPY --from=builder --chown=tewsal:nodejs /app/src ./src
 COPY --from=builder --chown=tewsal:nodejs /app/package.json ./package.json
 
+# entrypoint: migrate + seed (idempotent) ثم تشغيل السيرفر
+COPY --chown=tewsal:nodejs docker-entrypoint.sh ./docker-entrypoint.sh
+RUN chmod +x ./docker-entrypoint.sh
+
 USER tewsal
 EXPOSE 3000
 ENV PORT=3000 HOSTNAME=0.0.0.0
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=5 \
   CMD curl -fsS http://127.0.0.1:3000/api/health || exit 1
 
-CMD ["node", "server.js"]
+CMD ["./docker-entrypoint.sh"]
