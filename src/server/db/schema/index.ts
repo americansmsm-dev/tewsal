@@ -14,3 +14,4 @@ export * from "./claims";
 export * from "./returns";
 export * from "./crm";
 export * from "./ops";
+export * from "./warehouse";
