@@ -30,6 +30,7 @@ import { openClaim } from "@/server/services/claim";
 import { enterReturns } from "@/server/services/returns";
 import { recordAttachment } from "@/server/services/attachment";
 import { fireWebhooks } from "@/server/services/apiAccess";
+import { notifyStatusChange } from "@/server/services/notifications";
 import { requireUser } from "@/server/http/context";
 import { ok, fail, handleError, forbidden } from "@/server/http/respond";
 import type { UserRole } from "@/server/db/schema/identity";
@@ -201,6 +202,8 @@ export async function POST(
           if (mid) await fireWebhooks(db, { merchantId: mid, event: String(b.to), payload: { awb: result.res.awb, status: b.to, shipmentId } });
         } catch { /* best-effort */ }
       })();
+      // إشعار العميل (واتساب أو محاكاة) — نفس النمط best-effort
+      void (async () => { try { await notifyStatusChange(db, { shipmentId, event: String(b.to) }); } catch { /* best-effort */ } })();
     }
 
     return ok(

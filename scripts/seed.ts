@@ -31,6 +31,7 @@ import {
   SEED_WORKING_HOURS,
   SEED_RETURN_SHELVES,
   SEED_EXPENSE_CATEGORIES,
+  SEED_NOTIFICATION_TEMPLATES,
 } from "../src/server/db/seed-data";
 
 // ---------------------------------------------------------------
@@ -346,6 +347,21 @@ async function main() {
             ON CONFLICT (code) DO NOTHING`;
         }
         log("🧾", `بنود المصروفات: ${SEED_EXPENSE_CATEGORIES.length}`);
+      }
+
+      // ---------------------------------------------------------
+      // ١٠.٣) قوالب الإشعارات (لو الجدول موجود)
+      // ---------------------------------------------------------
+      const [hasTmpl] = await tx<{ exists: boolean }[]>`
+        SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='notification_templates') AS exists`;
+      if (hasTmpl?.exists) {
+        for (const t of SEED_NOTIFICATION_TEMPLATES) {
+          await tx`
+            INSERT INTO notification_templates (key, channel, body_ar)
+            VALUES (${t.key}, ${t.channel}, ${t.bodyAr})
+            ON CONFLICT (key, channel) DO ${FORCE_VALUES ? tx`UPDATE SET body_ar = EXCLUDED.body_ar` : tx`NOTHING`}`;
+        }
+        log("🔔", `قوالب الإشعارات: ${SEED_NOTIFICATION_TEMPLATES.length}`);
       }
 
       // ---------------------------------------------------------

@@ -364,6 +364,21 @@ export const SEED_SETTINGS = [
     category: "operations",
     valueType: "array",
   },
+  {
+    key: "notifications.daily_limit_per_merchant",
+    value: 300,
+    nameAr: "أقصى إشعارات في اليوم لكل تاجر",
+    description: "حماية من الإسراف في تكلفة الرسائل",
+    category: "notifications",
+    valueType: "number",
+  },
+  {
+    key: "notifications.cost_per_message_p",
+    value: 50,
+    nameAr: "تكلفة رسالة الواتساب التقديرية (قرش)",
+    category: "notifications",
+    valueType: "money",
+  },
   // --- الضرائب (قرار ٨ — مؤجّل) ---
   {
     key: "tax.vat_percent_bp",
@@ -416,6 +431,18 @@ export const SEED_RETURN_SHELVES = [
   { code: "R-A", nameAr: "رف المرتجعات A", capacity: 100 },
   { code: "R-B", nameAr: "رف المرتجعات B", capacity: 100 },
   { code: "R-C", nameAr: "رف المرتجعات C — القديمة", capacity: 100 },
+] as const;
+
+// ---------------------------------------------------------------
+// قوالب الإشعارات (مرحلة د) — قابلة للتعديل من الشاشة
+// ---------------------------------------------------------------
+
+export const SEED_NOTIFICATION_TEMPLATES = [
+  { key: "picked_up", channel: "whatsapp", bodyAr: "استلمنا شحنتك {awb} وهي في الطريق لمركز التوزيع 🚚" },
+  { key: "out_for_delivery", channel: "whatsapp", bodyAr: "شحنتك {awb} خرجت مع المندوب وهتوصلك النهاردة 🛵 — للاستفسار: {phone}" },
+  { key: "delivered", channel: "whatsapp", bodyAr: "تم تسليم شحنتك {awb} ✅ شكرًا لك — قيّم الخدمة: {track}" },
+  { key: "delivery_failed", channel: "whatsapp", bodyAr: "حاولنا نوصلك ومقدرناش ⚠️ — هنعيد المحاولة قريب. تتبّع: {track}" },
+  { key: "returned_to_merchant", channel: "whatsapp", bodyAr: "جاري إرجاع شحنتك {awb} للتاجر ↩️" },
 ] as const;
 
 // ---------------------------------------------------------------

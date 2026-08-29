@@ -115,6 +115,7 @@ export default function TrackPage() {
                 <div dir="ltr" style={{ color: "var(--muted)", fontSize: "0.9rem", marginTop: 4 }}>
                   {data.awb}
                 </div>
+                {isDelivered && <RatingWidget awb={data.awb} />}
               </div>
 
               {data.promisedAt && !isDelivered && (
@@ -229,6 +230,27 @@ export default function TrackPage() {
           توصّل للشحن — شركة شحن مصرية
         </p>
       </main>
+    </div>
+  );
+}
+
+function RatingWidget({ awb }: { awb: string }) {
+  const [rated, setRated] = useState(0);
+  const [done, setDone] = useState(false);
+  if (done) return <div style={{ marginTop: 14, fontSize: "0.9rem", fontWeight: 700, color: "var(--color-success)" }}>شكرًا لتقييمك 💚</div>;
+  async function rate(stars: number) {
+    setRated(stars);
+    await fetch("/api/public/v1/rate", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ awb, stars }) });
+    setTimeout(() => setDone(true), 400);
+  }
+  return (
+    <div style={{ marginTop: 14 }}>
+      <div style={{ fontSize: "0.82rem", color: "var(--muted)", marginBottom: 4 }}>قيّم خدمة التوصيل:</div>
+      <div style={{ fontSize: "1.8rem", letterSpacing: 4 }}>
+        {[1, 2, 3, 4, 5].map((s) => (
+          <span key={s} onClick={() => rate(s)} style={{ cursor: "pointer", filter: s <= rated ? "none" : "grayscale(1) opacity(0.4)" }}>⭐</span>
+        ))}
+      </div>
     </div>
   );
 }

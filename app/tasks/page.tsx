@@ -11,7 +11,7 @@ import { Overlay, ErrorBox } from "../components/TransitionModal";
 import { useCurrentUser } from "../lib/useCurrentUser";
 import { apiCall } from "../lib/client";
 
-type Tab = "tasks" | "tickets" | "expenses";
+type Tab = "tasks" | "tickets" | "expenses" | "notifications";
 function egp(p: string) { const v = BigInt(p || "0"); return `${(v / 100n).toLocaleString("en-US")}.${(v % 100n).toString().padStart(2, "0")} ج`; }
 const PRIO: Record<string, string> = { high: "عالية", urgent: "عاجلة", normal: "عادية", low: "منخفضة" };
 const PRIO_TONE: Record<string, string> = { high: "var(--color-danger)", urgent: "var(--color-danger)", normal: "var(--muted)", low: "var(--muted)" };
@@ -24,7 +24,7 @@ export default function OpsPage() {
   if (!user) return <Loading />;
   const isFinance = ["super_admin", "branch_manager", "accountant"].includes(user.role);
   const tabs: { k: Tab; l: string; fin?: boolean }[] = [
-    { k: "tasks", l: "التاسكات" }, { k: "tickets", l: "التذاكر" }, { k: "expenses", l: "المصروفات", fin: true },
+    { k: "tasks", l: "التاسكات" }, { k: "tickets", l: "التذاكر" }, { k: "expenses", l: "المصروفات", fin: true }, { k: "notifications", l: "الإشعارات", fin: true },
   ];
   const shown = tabs.filter((t) => !t.fin || isFinance);
   const active = shown.some((t) => t.k === tab) ? tab : shown[0]!.k;
@@ -43,6 +43,7 @@ export default function OpsPage() {
         {active === "tasks" && <TasksTab />}
         {active === "tickets" && <TicketsTab />}
         {active === "expenses" && <ExpensesTab />}
+        {active === "notifications" && <NotificationsTab />}
       </main>
     </div>
   );
@@ -266,6 +267,59 @@ function ExpenseModal({ categories, onClose, onDone }: { categories: Record<stri
       {err && <ErrorBox msg={err} />}
       <div style={{ display: "flex", gap: 8 }}><button className="btn btn-primary" style={{ flex: 1 }} disabled={!f.categoryId || !f.amount || !f.description.trim()} onClick={submit}>تسجيل (بيتقيّد في الدفتر)</button><button className="btn btn-ghost" onClick={onClose}>إلغاء</button></div>
     </Overlay>
+  );
+}
+
+// ─── الإشعارات ───
+const EV_AR: Record<string, string> = { picked_up: "الاستلام", out_for_delivery: "خرج للتسليم", delivered: "تم التسليم", delivery_failed: "تعذّر", returned_to_merchant: "إرجاع" };
+const NST: Record<string, string> = { sent: "اتبعت", simulated: "محاكاة", failed: "فشل", blocked_limit: "تخطّى الحد" };
+function NotificationsTab() {
+  const [d, setD] = useState<{ templates: Record<string, unknown>[]; log: Record<string, unknown>[]; whatsappLive: boolean } | null>(null);
+  const load = useCallback(async () => { const r = await apiCall<{ templates: Record<string, unknown>[]; log: Record<string, unknown>[]; whatsappLive: boolean }>("GET", "/api/v1/notifications"); if (r.ok && r.data) setD(r.data); }, []);
+  useEffect(() => { load(); }, [load]);
+  if (!d) return <div style={{ color: "var(--muted)" }}>جاري التحميل...</div>;
+  return (
+    <div style={{ display: "grid", gap: "1.25rem" }}>
+      {!d.whatsappLive && <div style={{ padding: "0.7rem 1rem", borderRadius: 10, background: "var(--warn-soft, #fbeed7)", color: "var(--color-warning)", fontSize: "0.85rem", fontWeight: 600 }}>⚠️ واتساب مش متضبط — الإشعارات بتتسجّل «محاكاة». أضف مفاتيح WHATSAPP_TOKEN و WHATSAPP_PHONE_ID للتفعيل.</div>}
+      <div className="card" style={{ padding: "1rem 1.2rem" }}>
+        <h3 style={{ margin: "0 0 0.8rem", fontSize: "1rem" }}>القوالب (تتعدّل بدون نشر)</h3>
+        <div style={{ display: "grid", gap: 10 }}>
+          {d.templates.map((t) => <TemplateRow key={t.id as string} t={t} onSaved={load} />)}
+        </div>
+        <p style={{ fontSize: "0.76rem", color: "var(--muted)", marginTop: 8 }}>المتغيرات: {"{awb} {reason} {track} {phone}"}</p>
+      </div>
+      <div className="card" style={{ overflowX: "auto" }}>
+        <h3 style={{ margin: "0.8rem 1rem", fontSize: "1rem" }}>آخر الإشعارات</h3>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.82rem", minWidth: 560 }}>
+          <thead><tr style={{ background: "var(--bg-soft)", textAlign: "right" }}><Th>الحدث</Th><Th>لـ</Th><Th>الحالة</Th><Th>التكلفة</Th></tr></thead>
+          <tbody>
+            {d.log.length === 0 ? <tr><td colSpan={4} style={{ padding: "2rem", textAlign: "center", color: "var(--muted)" }}>مفيش إشعارات</td></tr> :
+             d.log.slice(0, 40).map((l, i) => (
+              <tr key={i} style={{ borderTop: "1px solid var(--border)" }}>
+                <Td>{EV_AR[l.event as string] ?? l.event as string}</Td>
+                <Td><span dir="ltr" style={{ fontFamily: "monospace", fontSize: "0.78rem" }}>{l.to_phone as string}</span></Td>
+                <Td>{NST[l.status as string] ?? l.status as string}</Td>
+                <Td>{l.cost as string}</Td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+function TemplateRow({ t, onSaved }: { t: Record<string, unknown>; onSaved: () => void }) {
+  const [v, setV] = useState(t.body_ar as string);
+  const [saved, setSaved] = useState(false);
+  async function save() { const r = await apiCall("POST", "/api/v1/notifications", { id: t.id, bodyAr: v }); if (r.ok) { setSaved(true); setTimeout(() => setSaved(false), 1500); onSaved(); } }
+  return (
+    <div>
+      <div style={{ fontSize: "0.78rem", color: "var(--muted)", marginBottom: 3 }}>{EV_AR[t.key as string] ?? t.key as string}</div>
+      <div style={{ display: "flex", gap: 6 }}>
+        <input className="input" value={v} onChange={(e) => setV(e.target.value)} style={{ fontSize: "0.83rem" }} />
+        <button className="btn btn-ghost" style={{ padding: "0.35rem 0.8rem", fontSize: "0.8rem", color: saved ? "var(--color-success)" : undefined }} onClick={save}>{saved ? "✓" : "حفظ"}</button>
+      </div>
+    </div>
   );
 }
 
