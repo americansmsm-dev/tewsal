@@ -622,6 +622,31 @@ export function buildCommissionEntry(i: {
 }
 
 // ---------------------------------------------------------------
+// ١٠) رسم على التاجر (تخزين/فُلفيلمنت) — إيراد إضافي
+// ---------------------------------------------------------------
+
+/** رسم بيتحاسب على التاجر ويتحوّل إيراد (رسوم متجر إلكتروني/تخزين). */
+export function buildMerchantChargeEntry(i: {
+  sourceId: string;
+  merchantId: string;
+  amountP: Piastres;
+  kind: string;
+  memo: string;
+}): DraftEntry {
+  if (i.amountP <= 0n) throw new Error("رسم صفر مبيعملش قيد");
+  return entry({
+    descriptionAr: i.memo,
+    sourceType: "manual",
+    sourceId: i.sourceId,
+    kind: i.kind,
+    lines: [
+      { account: ACC.merchantPayable(i.merchantId), debitP: i.amountP, creditP: 0n, memo: i.memo, merchantId: i.merchantId },
+      { account: ACC.revenueOther(), debitP: 0n, creditP: i.amountP, memo: i.memo, merchantId: i.merchantId },
+    ],
+  });
+}
+
+// ---------------------------------------------------------------
 // ٩) مصروف تشغيلي (بند مصروفات / أسطول)
 // ---------------------------------------------------------------
 

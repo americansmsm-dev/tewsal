@@ -31,6 +31,7 @@ import type { MerchantTier } from "../db/schema/pricing";
 import { applyTransition, type Actor } from "./transition";
 import { buildTransitionFinancialEntry } from "./shipmentFinancials";
 import { isBlacklisted } from "./crm";
+import { pullFromStock } from "./fulfillment";
 import type { SqlExecutor } from "./ledger";
 import { HttpError } from "../http/respond";
 
@@ -63,6 +64,9 @@ export interface CreateShipmentInput {
   serviceType?: string;
   merchantReference?: string | null;
   notesToCourier?: string | null;
+  /** سحب من مخزون التاجر (فُلفيلمنت) — بيخصم الكمية */
+  productId?: string | null;
+  productQty?: number;
   /** لو true بيتأكد فورًا (draft → awaiting_pickup) */
   confirm?: boolean;
 }
@@ -245,6 +249,11 @@ export async function createShipment(
         ${isEstimate}, ${line.isAuto}
       )
     `);
+  }
+
+  // ═══ ٨.١) سحب من المخزون (فُلفيلمنت) — نفس الترانزاكشن ═══
+  if (input.productId) {
+    await pullFromStock(ex, { productId: input.productId, qty: input.productQty ?? 1, shipmentId, actorUserId: actor.userId });
   }
 
   // ═══ ٩) أول سطر تاريخ (الإنشاء) ═══

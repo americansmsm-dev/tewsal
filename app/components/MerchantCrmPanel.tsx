@@ -24,17 +24,26 @@ function egp(p: string): string {
   return `${(v / 100n).toLocaleString("en-US")}.${(v % 100n).toString().padStart(2, "0")} ج`;
 }
 
+interface Product { id: string; sku: string; name_ar: string; quantity: number; price_p: string }
+
 export function MerchantCrmPanel({ merchantId }: { merchantId: string }) {
   const [d, setD] = useState<CrmData | null>(null);
   const [zones, setZones] = useState<Zone[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
   const [open, setOpen] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
+  const loadProducts = useCallback(async () => { const r = await apiCall<{ products: Product[] }>("GET", `/api/v1/merchants/${merchantId}/products`); if (r.ok && r.data) setProducts(r.data.products); }, [merchantId]);
   const load = useCallback(async () => {
     const r = await apiCall<CrmData>("GET", `/api/v1/merchants/${merchantId}/crm`);
     if (r.ok) setD(r.data);
   }, [merchantId]);
-  useEffect(() => { if (open && !d) { load(); apiCall<{ zones: Zone[] }>("GET", "/api/v1/geo/zones").then((r) => setZones(r.data?.zones ?? [])); } }, [open, d, load]);
+  useEffect(() => { if (open && !d) { load(); loadProducts(); apiCall<{ zones: Zone[] }>("GET", "/api/v1/geo/zones").then((r) => setZones(r.data?.zones ?? [])); } }, [open, d, load, loadProducts]);
+
+  async function stockAct(body: Record<string, unknown>, path: string, okMsg: string) {
+    const r = await apiCall("POST", path, body);
+    if (r.ok) { setMsg(okMsg); loadProducts(); setTimeout(() => setMsg(null), 2500); } else setMsg(r.error?.message ?? "فشل");
+  }
 
   async function act(body: Record<string, unknown>, okMsg: string) {
     const r = await apiCall("POST", `/api/v1/merchants/${merchantId}/crm`, body);
@@ -99,6 +108,28 @@ export function MerchantCrmPanel({ merchantId }: { merchantId: string }) {
             )}
             <button className="btn btn-ghost" style={{ padding: "0.3rem 0.7rem", fontSize: "0.8rem", marginTop: 6 }} onClick={() => { const label = window.prompt("اسم العنوان؟"); const address = label && window.prompt("العنوان؟"); if (label && address) act({ action: "address", label, address }, "اتسجّل عنوان"); }}>+ عنوان</button>
           </Section>
+
+          {/* المخزون (فُلفيلمنت) */}
+          <Section title="المخزون (فُلفيلمنت)">
+            {products.length === 0 ? <Muted>مفيش منتجات مخزّنة</Muted> : (
+              <div style={{ display: "grid", gap: 4 }}>
+                {products.map((p) => (
+                  <div key={p.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.83rem", padding: "0.3rem 0" }}>
+                    <span><b>{p.name_ar}</b> <span style={{ color: "var(--muted)", fontFamily: "monospace", fontSize: "0.72rem" }}>{p.sku}</span></span>
+                    <span style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                      <button style={miniBtn} onClick={() => stockAct({ delta: -1 }, `/api/v1/products/${p.id}/stock`, "−1")}>−</button>
+                      <b style={{ minWidth: 28, textAlign: "center", color: p.quantity <= 0 ? "var(--color-danger)" : undefined }}>{p.quantity}</b>
+                      <button style={miniBtn} onClick={() => stockAct({ delta: 1 }, `/api/v1/products/${p.id}/stock`, "+1")}>+</button>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+              <button className="btn btn-ghost" style={{ padding: "0.3rem 0.7rem", fontSize: "0.8rem" }} onClick={() => { const sku = window.prompt("SKU؟"); const nameAr = sku && window.prompt("اسم المنتج؟"); const q = nameAr && window.prompt("الكمية؟", "0"); if (sku && nameAr) stockAct({ sku, nameAr, quantity: Number(q) || 0 }, `/api/v1/merchants/${merchantId}/products`, "اتسجّل منتج"); }}>+ منتج</button>
+              <button className="btn btn-ghost" style={{ padding: "0.3rem 0.7rem", fontSize: "0.8rem", color: "var(--color-orange-600)" }} onClick={() => { const amt = window.prompt("مبلغ رسم التخزين (ج)؟"); if (amt) apiCall("POST", `/api/v1/merchants/${merchantId}/storage-fee`, { amount: amt }).then((r) => { setMsg(r.ok ? "اتحاسب رسم تخزين" : (r.error?.message ?? "فشل")); setTimeout(() => setMsg(null), 2500); }); }}>رسم تخزين</button>
+            </div>
+          </Section>
         </div>
       )}
     </div>
@@ -143,6 +174,7 @@ function AddOverride({ zones, onAdd }: { zones: Zone[]; onAdd: (zoneId: string, 
     </div>
   );
 }
+const miniBtn: React.CSSProperties = { width: 24, height: 24, borderRadius: 6, border: "1px solid var(--border)", background: "var(--surface)", cursor: "pointer", fontWeight: 800, color: "var(--text)", lineHeight: 1 };
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return <div style={{ borderTop: "1px solid var(--border)", paddingTop: "0.8rem" }}><div style={{ fontWeight: 700, fontSize: "0.85rem", marginBottom: 6 }}>{title}</div>{children}</div>;
 }

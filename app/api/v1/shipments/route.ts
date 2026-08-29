@@ -42,6 +42,8 @@ const createSchema = z.object({
   serviceType: z.string().max(30).optional(),
   merchantReference: z.string().max(120).nullable().optional(),
   notesToCourier: z.string().max(1000).nullable().optional(),
+  productId: z.string().uuid().nullable().optional(),
+  productQty: z.number().int().positive().optional(),
   confirm: z.boolean().optional(),
 });
 
