@@ -165,6 +165,7 @@ export async function createShipment(
     weightActualKg: input.weightKg ?? null,
     isFragile: input.isFragile ?? false,
     fragileInsured: input.fragileInsured ?? false,
+    serviceType: input.serviceType ?? "deliver",
     codEnabled,
     isRemoteArea: isRemote,
     remoteSurchargeP,

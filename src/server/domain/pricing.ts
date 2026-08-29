@@ -76,6 +76,8 @@ export interface ShipmentPricingInput {
   weightActualKg: number | null;
   isFragile: boolean;
   fragileInsured: boolean;
+  /** نوع الخدمة — «exchange» بيحاسب رسم استبدال */
+  serviceType?: string;
   /** المحافظة دي بتدعم التحصيل؟ */
   codEnabled: boolean;
   isRemoteArea: boolean;
@@ -279,6 +281,22 @@ export function calculateShipment(
           isAuto: true,
         });
       }
+    }
+  }
+
+  // --- رسم الاستبدال ---
+  // بيتحاسب على شحنات الاستبدال (العميل بيرجّع حاجة وياخد بدلها)
+  if (input.serviceType === "exchange") {
+    const f = findFee("EXCHANGE");
+    if (f && f.valueP > 0n) {
+      feeLines.push({
+        code: "EXCHANGE",
+        descriptionAr: f.nameAr,
+        qty: 1,
+        unitValueP: f.valueP,
+        amountP: f.valueP,
+        isAuto: true,
+      });
     }
   }
 

@@ -26,6 +26,11 @@
     "verify:runsheet": "tsx scripts/verify-runsheet.ts",
     "verify:claim": "tsx scripts/verify-claim.ts",
     "verify:scan": "tsx scripts/verify-scan.ts",
+    "verify:returns": "tsx scripts/verify-returns.ts",
+    "verify:fees": "tsx scripts/verify-fees.ts",
+    "verify:attachments": "tsx scripts/verify-attachments.ts",
+    "verify:reports": "tsx scripts/verify-reports.ts",
+    "verify:reports-ops": "tsx scripts/verify-reports-ops.ts",
     "reset-admin": "tsx scripts/reset-admin.ts",
     "db:migrate:prod": "node --experimental-strip-types scripts/migrate.ts"
   },

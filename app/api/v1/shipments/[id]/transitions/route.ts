@@ -27,6 +27,8 @@ import { applyTransition, type TransitionInput } from "@/server/services/transit
 import type { Role } from "@/server/domain/statusMachine";
 import { buildTransitionFinancialEntry } from "@/server/services/shipmentFinancials";
 import { openClaim } from "@/server/services/claim";
+import { enterReturns } from "@/server/services/returns";
+import { recordAttachment } from "@/server/services/attachment";
 import { requireUser } from "@/server/http/context";
 import { ok, fail, handleError, forbidden } from "@/server/http/respond";
 import type { UserRole } from "@/server/db/schema/identity";
@@ -166,6 +168,24 @@ export async function POST(
         const n = (Array.isArray(seqR) ? seqR : (seqR as { rows: { n: string }[] }).rows)[0] as { n: string };
         const claim = await openClaim(tx, { shipmentId, code: claimCode(n.n), actorUserId: ctx.user.userId });
         claimId = claim.claimId;
+      }
+
+      // ⚠️ دخول المرتجعات بيسجّل الشحنة في سجل المرتجعات تلقائيًا
+      //    (للرف والعمر والتصعيد) — نفس الترانزاكشن، بدون قيد.
+      if (!res.idempotentReplay && b.to === "awaiting_return") {
+        await enterReturns(tx, { shipmentId, actorUserId: ctx.user.userId });
+      }
+
+      // ⚠️ صور الإثبات/التوقيع اللي جت مع التحول بتتربط بالشحنة
+      //    كمرفقات (المندوب رفعها لـ R2 قبل كده وبعت المفتاح).
+      if (!res.idempotentReplay) {
+        const photoKind = b.to === "damaged" ? "damage" : "pod_photo";
+        if (b.photoUrl) {
+          await recordAttachment(tx, { shipmentId, kind: photoKind, r2Key: b.photoUrl, actorUserId: ctx.user.userId });
+        }
+        if (b.signatureUrl) {
+          await recordAttachment(tx, { shipmentId, kind: "signature", r2Key: b.signatureUrl, actorUserId: ctx.user.userId });
+        }
       }
       return { res, claimId };
     });

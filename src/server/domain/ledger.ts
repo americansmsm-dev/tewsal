@@ -292,6 +292,51 @@ export function buildCancellationEntry(i: {
 }
 
 // ---------------------------------------------------------------
+// ٢.١ب) إتلاف المرتجع بعد المدة (البضاعة اتخلّى عنها)
+// ---------------------------------------------------------------
+
+/**
+ * إتلاف مرتجع شاخ على الرف — التاجر مش بيستلمه.
+ * الشحن بيستحق (البضاعة دخلت المقر واتشحنت) زي المرتجع بالظبط،
+ * بس **من غير رسم مرتجع** لأن مفيش رحلة إرجاع فعلية حصلت.
+ *
+ * ⚠️ زي الإلغاء بعد المخزن، لو الشحن صفر مفيش قيد.
+ */
+export function buildDisposalEntry(i: {
+  shipmentId: string;
+  merchantId: string;
+  awb: string;
+  shippingP: Piastres;
+}): DraftEntry {
+  if (i.shippingP <= 0n) {
+    throw new Error("إتلاف بشحن صفر مبيعملش قيد");
+  }
+  return entry({
+    descriptionAr: `إتلاف المرتجع ${i.awb} بعد المدة`,
+    sourceType: "shipment",
+    sourceId: i.shipmentId,
+    kind: "disposal",
+    lines: [
+      {
+        account: ACC.merchantPayable(i.merchantId),
+        debitP: i.shippingP,
+        creditP: 0n,
+        memo: `شحن مستحق على الإتلاف ${i.awb}`,
+        shipmentId: i.shipmentId,
+        merchantId: i.merchantId,
+      },
+      {
+        account: ACC.revenueShipping(),
+        debitP: 0n,
+        creditP: i.shippingP,
+        memo: `شحن ${i.awb}`,
+        shipmentId: i.shipmentId,
+      },
+    ],
+  });
+}
+
+// ---------------------------------------------------------------
 // ٢.٢) رسم خدمة الاستلام (قرار ١٠: أقل من ٥ أوردرات → ٥٠ ج)
 // ---------------------------------------------------------------
 
@@ -440,6 +485,8 @@ export interface PayoutInput {
   method: string;
   /** رسم مصاريف المندوب لو الاستلام كاش (٥٠ ج) */
   cashFeeP?: Piastres;
+  /** رسم تسريع التحصيل/التحويل (اختياري، بطلب التاجر) */
+  expediteFeeP?: Piastres;
   branchId?: string;
 }
 
@@ -490,6 +537,25 @@ export function buildPayoutEntry(i: PayoutInput): DraftEntry {
       debitP: 0n,
       creditP: cashFee,
       memo: "إيراد مصاريف مندوب",
+      merchantId: i.merchantId,
+    });
+  }
+
+  // رسم التسريع (بطلب التاجر) — بيتخصم إضافي ويتحول إيراد
+  const expediteFee = i.expediteFeeP ?? 0n;
+  if (expediteFee > 0n) {
+    lines.push({
+      account: ACC.merchantPayable(i.merchantId),
+      debitP: expediteFee,
+      creditP: 0n,
+      memo: "رسم تسريع",
+      merchantId: i.merchantId,
+    });
+    lines.push({
+      account: ACC.revenueOther(),
+      debitP: 0n,
+      creditP: expediteFee,
+      memo: "إيراد تسريع",
       merchantId: i.merchantId,
     });
   }

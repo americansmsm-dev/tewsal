@@ -18,11 +18,12 @@ const ITEMS: NavItem[] = [
   { href: "/pickups", label: "الاستلام", roles: ["super_admin", "branch_manager", "ops"] },
   { href: "/scan", label: "المسح", roles: ["super_admin", "branch_manager", "ops"] },
   { href: "/runsheets", label: "الكشوف", roles: ["super_admin", "branch_manager", "ops", "accountant"] },
+  { href: "/returns", label: "المرتجعات", roles: ["super_admin", "branch_manager", "ops", "accountant"] },
   { href: "/merchants", label: "التجار", roles: ["super_admin", "branch_manager", "ops", "accountant"] },
   { href: "/treasury", label: "الخزينة", roles: ["super_admin", "branch_manager", "accountant"] },
   { href: "/settlements", label: "التسويات", roles: ["super_admin", "branch_manager", "accountant"] },
   { href: "/claims", label: "المطالبات", roles: ["super_admin", "branch_manager", "accountant", "ops"] },
-  { href: "/reports/aging", label: "التقارير", roles: ["super_admin", "branch_manager", "accountant"] },
+  { href: "/reports", label: "التقارير", roles: ["super_admin", "branch_manager", "accountant", "ops"] },
   { href: "/team", label: "الفريق", roles: ["super_admin", "branch_manager"] },
 ];
 

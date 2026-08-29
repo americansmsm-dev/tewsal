@@ -9,6 +9,7 @@ import {
   buildPayoutEntry,
   buildCompensationEntry,
   buildCancellationEntry,
+  buildDisposalEntry,
   buildPickupFeeEntry,
   buildCommissionEntry,
   buildReversalEntry,
@@ -239,6 +240,29 @@ describe("دفع التسوية", () => {
     expect(formatEGP(netOnAccount(e, ACC.branchCash(B)))).toBe("-1,000.00 ج");
   });
 
+  it("رسم التسريع بيتخصم إضافي ويتحوّل إيراد", () => {
+    const e = buildPayoutEntry({
+      settlementId: "st-4", merchantId: M, code: "STL-4",
+      netPayableP: P("1000"), method: "bank", expediteFeeP: P("25"),
+    });
+    expectBalanced(e);
+    // التاجر اتخصم منه ١٠٢٥ (١٠٠٠ تحويل + ٢٥ تسريع)
+    expect(formatEGP(netOnAccount(e, ACC.merchantPayable(M)))).toBe("1,025.00 ج");
+    expect(formatEGP(-netOnAccount(e, ACC.revenueOther()))).toBe("25.00 ج");
+    expect(formatEGP(netOnAccount(e, ACC.companyBank()))).toBe("-1,000.00 ج");
+  });
+
+  it("الاستلام كاش + تسريع مع بعض", () => {
+    const e = buildPayoutEntry({
+      settlementId: "st-5", merchantId: M, code: "STL-5",
+      netPayableP: P("1000"), method: "cash", cashFeeP: P("50"), expediteFeeP: P("25"), branchId: B,
+    });
+    expectBalanced(e);
+    // ١٠٠٠ + ٥٠ + ٢٥ = ١٠٧٥
+    expect(formatEGP(netOnAccount(e, ACC.merchantPayable(M)))).toBe("1,075.00 ج");
+    expect(formatEGP(-netOnAccount(e, ACC.revenueOther()))).toBe("75.00 ج");
+  });
+
   it("⚠️ بيرفض التحويل بصافي صفر أو سالب", () => {
     expect(() =>
       buildPayoutEntry({ settlementId: "x", merchantId: M, code: "C", netPayableP: 0n, method: "bank" })
@@ -285,6 +309,22 @@ describe("قيد الإلغاء بعد المخزن — قرار ٥", () => {
 
   it("بيرفض الإلغاء بشحن صفر (الإلغاء المبكر مجاني)", () => {
     expect(() => buildCancellationEntry({ shipmentId: S, merchantId: M, awb: AWB, shippingP: 0n })).toThrow(/مجاني/);
+  });
+});
+
+describe("قيد الإتلاف — المرتجع اللي اتخلّى عنه", () => {
+  it("بيحاسب الشحن بس (بدون رسم مرتجع)", () => {
+    const e = buildDisposalEntry({ shipmentId: S, merchantId: M, awb: AWB, shippingP: P("100") });
+    expectBalanced(e);
+    expect(formatEGP(netOnAccount(e, ACC.merchantPayable(M)))).toBe("100.00 ج");
+    expect(formatEGP(-netOnAccount(e, ACC.revenueShipping()))).toBe("100.00 ج");
+    // مفيش رسم مرتجع في الإتلاف
+    expect(netOnAccount(e, ACC.revenueReturnFee())).toBe(0n);
+    expect(e.kind).toBe("disposal");
+  });
+
+  it("بيرفض الإتلاف بشحن صفر", () => {
+    expect(() => buildDisposalEntry({ shipmentId: S, merchantId: M, awb: AWB, shippingP: 0n })).toThrow();
   });
 });
 

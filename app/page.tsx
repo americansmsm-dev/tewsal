@@ -12,6 +12,7 @@ import { AppNav } from "./components/AppNav";
 import { useCurrentUser } from "./lib/useCurrentUser";
 import { CreateShipmentModal } from "./components/CreateShipmentModal";
 import { TransitionModal } from "./components/TransitionModal";
+import { ShipmentDetailsModal } from "./components/ShipmentDetailsModal";
 import {
   apiCall,
   STATUS_LABELS_AR,
@@ -62,6 +63,7 @@ export default function Dashboard() {
   const [q, setQ] = useState("");
   const [showCreate, setShowCreate] = useState(false);
   const [active, setActive] = useState<ShipmentRow | null>(null);
+  const [details, setDetails] = useState<ShipmentRow | null>(null);
 
   const load = useCallback(async () => {
     const params = new URLSearchParams();
@@ -210,6 +212,14 @@ export default function Dashboard() {
                           ) : (
                             <span style={{ color: "var(--muted)", fontSize: "0.8rem" }}>—</span>
                           )}
+                          <button
+                            className="btn btn-ghost"
+                            style={{ padding: "0.3rem 0.6rem", fontSize: "0.8rem" }}
+                            title="تفاصيل (رسوم وصور إثبات)"
+                            onClick={() => setDetails(s)}
+                          >
+                            📋
+                          </button>
                           <Link
                             href={`/shipments/${s.id}/label`}
                             target="_blank"
@@ -255,6 +265,15 @@ export default function Dashboard() {
             setActive(null);
             load();
           }}
+        />
+      )}
+      {details && (
+        <ShipmentDetailsModal
+          shipmentId={details.id}
+          awb={details.awb}
+          status={details.status}
+          canEdit={["super_admin", "branch_manager", "ops", "accountant"].includes(role)}
+          onClose={() => setDetails(null)}
         />
       )}
     </div>

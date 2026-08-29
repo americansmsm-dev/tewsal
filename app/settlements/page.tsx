@@ -129,6 +129,7 @@ function PayModal({ settlement, onClose, onDone }: { settlement: Settlement; onC
   const [method, setMethod] = useState("bank");
   const [reference, setReference] = useState("");
   const [cashFee, setCashFee] = useState("50");
+  const [expediteFee, setExpediteFee] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -136,6 +137,7 @@ function PayModal({ settlement, onClose, onDone }: { settlement: Settlement; onC
     setError(null); setBusy(true);
     const body: Record<string, unknown> = { method, reference };
     if (method === "cash") body.cashFee = cashFee;
+    if (expediteFee.trim() && Number(expediteFee) > 0) body.expediteFee = expediteFee.trim();
     const r = await apiCall("POST", `/api/v1/settlements/${settlement.id}/pay`, body);
     setBusy(false);
     if (r.ok) onDone(`اتدفعت ${settlement.code} — ${egp(settlement.net_payable_p)}`);
@@ -163,6 +165,8 @@ function PayModal({ settlement, onClose, onDone }: { settlement: Settlement; onC
           <input className="input" value={cashFee} onChange={(e) => setCashFee(e.target.value)} dir="ltr" style={{ textAlign: "right", marginBottom: "0.8rem" }} />
         </>
       )}
+      <label className="label">رسم تسريع (ج) — اختياري</label>
+      <input className="input" value={expediteFee} onChange={(e) => setExpediteFee(e.target.value)} dir="ltr" inputMode="decimal" style={{ textAlign: "right", marginBottom: "0.8rem" }} placeholder="سيبه فاضي لو مفيش تسريع" />
       {error && <ErrorBox msg={error} />}
       <div style={{ display: "flex", gap: 8 }}>
         <button className="btn btn-primary" style={{ flex: 1 }} disabled={busy} onClick={submit}>{busy ? "جاري..." : "تأكيد الدفع"}</button>

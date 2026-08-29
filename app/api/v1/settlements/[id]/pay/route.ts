@@ -18,6 +18,8 @@ const paySchema = z.object({
   reference: z.string().max(120).optional(),
   /** رسم استلام كاش (٥٠ ج) بالجنيه — للطريقة cash */
   cashFee: z.string().regex(/^\d+(\.\d{1,2})?$/).optional(),
+  /** رسم تسريع التحصيل/التحويل بالجنيه (اختياري، بطلب التاجر) */
+  expediteFee: z.string().regex(/^\d+(\.\d{1,2})?$/).optional(),
   branchId: z.string().uuid().optional(),
 });
 
@@ -38,6 +40,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         method: parsed.data.method,
         reference: parsed.data.reference ?? null,
         cashFeeP: parsed.data.cashFee ? poundsToPiastres(parsed.data.cashFee) : undefined,
+        expediteFeeP: parsed.data.expediteFee ? poundsToPiastres(parsed.data.expediteFee) : undefined,
         branchId: parsed.data.branchId ?? null,
       })
     );

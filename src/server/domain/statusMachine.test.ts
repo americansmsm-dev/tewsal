@@ -197,6 +197,26 @@ describe("المرتجعات", () => {
       ]).ok
     ).toBe(true);
   });
+
+  it("إتلاف المرتجع لمدير النظام بس، بسبب مكتوب، ومالي", () => {
+    // العمليات ومدير الفرع ممنوعين
+    expect(canTransition("awaiting_return", "disposed", "ops", ["note"]).ok).toBe(false);
+    expect(canTransition("awaiting_return", "disposed", "branch_manager", ["note"]).ok).toBe(false);
+    // مدير النظام لازم يكتب سبب
+    expect(canTransition("awaiting_return", "disposed", "super_admin").ok).toBe(false);
+    expect(canTransition("awaiting_return", "disposed", "super_admin", ["note"]).ok).toBe(true);
+    // الإتلاف بيعمل قيد (شحن مستحق على البضاعة المتخلّى عنها)
+    expect(isFinancialTransition("awaiting_return", "disposed")).toBe(true);
+  });
+
+  it("الإتلاف حالة نهائية مقفولة — مفيش خروج منها", () => {
+    expect(isTerminal("disposed")).toBe(true);
+    expect(TRANSITIONS.disposed).toHaveLength(0);
+  });
+
+  it("الإتلاف مبيظهرش للعميل النهائي", () => {
+    expect(PUBLIC_STATUS_LABELS_AR.disposed).toBeUndefined();
+  });
 });
 
 describe("الإلغاء والفوترة", () => {

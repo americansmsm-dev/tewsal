@@ -46,6 +46,7 @@ const feeDefs: FeeDefinition[] = [
   { code: "EXTRA_PIECE", nameAr: "قطعة زائدة", calcType: "per_unit", valueP: P("5"), percentBp: 0, thresholdP: 0n, basis: "full_amount", isAuto: true },
   { code: "OVERWEIGHT_KG", nameAr: "وزن زائد", calcType: "per_unit", valueP: P("10"), percentBp: 0, thresholdP: 0n, basis: "full_amount", isAuto: true },
   { code: "FRAGILE_INSURANCE", nameAr: "تأمين القابل للكسر", calcType: "flat", valueP: P("30"), percentBp: 0, thresholdP: 0n, basis: "full_amount", isAuto: false },
+  { code: "EXCHANGE", nameAr: "رسوم الاستبدال", calcType: "flat", valueP: P("15"), percentBp: 0, thresholdP: 0n, basis: "full_amount", isAuto: true },
 ];
 
 /** قرار ٧: المرتجع ٦٥ ج برا التغطية، والإسكندرية ١٠٠ ج */
@@ -213,6 +214,18 @@ describe("الرسوم الإضافية", () => {
       input({ isFragile: true, fragileInsured: false }), priceList, [], feeDefs, feeOverrides
     );
     expect(notInsured.feeLines.find((l) => l.code === "FRAGILE_INSURANCE")).toBeUndefined();
+  });
+
+  it("رسم الاستبدال بيتحاسب بس على خدمة exchange", () => {
+    const normal = calculateShipment(input(), priceList, [], feeDefs, feeOverrides);
+    expect(normal.feeLines.find((l) => l.code === "EXCHANGE")).toBeUndefined();
+
+    const exchange = calculateShipment(
+      input({ serviceType: "exchange" }), priceList, [], feeDefs, feeOverrides
+    );
+    const line = exchange.feeLines.find((l) => l.code === "EXCHANGE");
+    expect(line).toBeDefined();
+    expect(formatEGP(line!.amountP)).toBe("15.00 ج");
   });
 });
 

@@ -33,6 +33,7 @@ export const SHIPMENT_STATUSES = [
   "awaiting_return",
   "out_for_return",
   "returned_to_merchant",
+  "disposed",
   "lost",
   "damaged",
   "cancelled",
@@ -55,6 +56,7 @@ export const STATUS_LABELS_AR: Record<ShipmentStatus, string> = {
   awaiting_return: "بانتظار الإرجاع للتاجر",
   out_for_return: "خرج للإرجاع للتاجر",
   returned_to_merchant: "تم الإرجاع للتاجر",
+  disposed: "أُتلِفت",
   lost: "مفقود",
   damaged: "تالف",
   cancelled: "ملغي",
@@ -86,6 +88,7 @@ export const TERMINAL_STATUSES = [
   "delivered",
   "partially_delivered",
   "returned_to_merchant",
+  "disposed",
   "lost",
   "damaged",
   "cancelled",
@@ -301,6 +304,15 @@ export const TRANSITIONS: Record<ShipmentStatus, readonly Transition[]> = {
       requires: ["run_sheet", "note"],
       label: "إعادة محاولة التسليم (بطلب التاجر)",
     },
+    {
+      // إتلاف المرتجع اللي شاخ على الرف (التاجر مش بيستلمه) —
+      // مدير النظام بس، بموافقة وسبب مكتوب، وبيتحاسب عليه شحن.
+      to: "disposed",
+      roles: ["super_admin"],
+      requires: ["note"],
+      financial: true,
+      label: "إتلاف المرتجع بعد المدة (بموافقة مدير النظام)",
+    },
   ],
 
   out_for_return: [
@@ -350,6 +362,7 @@ export const TRANSITIONS: Record<ShipmentStatus, readonly Transition[]> = {
   delivered: [],
   partially_delivered: [],
   returned_to_merchant: [],
+  disposed: [],
   lost: [],
   damaged: [],
   cancelled: [],

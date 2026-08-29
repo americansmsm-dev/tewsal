@@ -29,6 +29,7 @@ import {
   SEED_REASON_CODES,
   SEED_ACCOUNTS,
   SEED_WORKING_HOURS,
+  SEED_RETURN_SHELVES,
 } from "../src/server/db/seed-data";
 
 // ---------------------------------------------------------------
@@ -318,6 +319,18 @@ async function main() {
       `;
       // الحساب البنكي الرئيسي — ownerId = 'main' في الكود بيقابل صف الشركة
       log("🏢", "الفرع الرئيسي + خزنته");
+
+      // ---------------------------------------------------------
+      // ١٠.١) رفوف المرتجعات الافتراضية
+      // ---------------------------------------------------------
+      for (const sh of SEED_RETURN_SHELVES) {
+        await tx`
+          INSERT INTO return_shelves (code, name_ar, branch_id, capacity)
+          VALUES (${sh.code}, ${sh.nameAr}, ${branch!.id}, ${sh.capacity})
+          ON CONFLICT (code) DO NOTHING
+        `;
+      }
+      log("📦", `رفوف المرتجعات: ${SEED_RETURN_SHELVES.length}`);
 
       // ---------------------------------------------------------
       // ١١) حساب المدير الأول

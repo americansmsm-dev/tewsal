@@ -20,6 +20,7 @@ import {
   buildDeliveryEntry,
   buildReturnEntry,
   buildCancellationEntry,
+  buildDisposalEntry,
   type DraftEntry,
 } from "../domain/ledger";
 import type { SqlExecutor } from "./ledger";
@@ -118,6 +119,19 @@ export async function buildTransitionFinancialEntry(
       });
     }
 
+    case "disposed": {
+      // إتلاف مرتجع اتخلّى عنه — الشحن بيستحق زي المرتجع (البضاعة
+      // دخلت المقر)، بس بدون رسم مرتجع لأن مفيش رحلة إرجاع فعلية.
+      const chargeShipping = await boolSetting(ex, "billing.charge_shipping_on_return", true);
+      if (!chargeShipping || shippingP <= 0n) return null;
+      return buildDisposalEntry({
+        shipmentId: ship.id,
+        merchantId: ship.merchant_id,
+        awb: ship.awb,
+        shippingP,
+      });
+    }
+
     // فقد/تلف → مطالبة، مفيش قيد دلوقتي
     default:
       return null;
@@ -152,7 +166,12 @@ async function computeCodFee(ex: SqlExecutor, collectedP: bigint): Promise<bigin
   });
 }
 
-/** مجموع الرسوم الإضافية الفعّالة (قطع/وزن/نائية) — بدون الشحن والتحصيل */
+/**
+ * مجموع الرسوم الإضافية الفعّالة (قطع/وزن/نائية/استبدال/تغليف) —
+ * بدون الشحن والتحصيل والمرتجع (اللي بتتحاسب في مكانها).
+ * الاستبدال (EXCHANGE) والتغليف الإضافي (EXTRA_PACKAGING) بيدخلوا هنا
+ * فبيتقيّدوا مع التسليم كإيراد إضافي على التاجر.
+ */
 async function sumOtherFees(ex: SqlExecutor, shipmentId: string): Promise<bigint> {
   const rows = rowsOf<{ total: string }>(
     await ex.execute(sql`
@@ -161,7 +180,7 @@ async function sumOtherFees(ex: SqlExecutor, shipmentId: string): Promise<bigint
       WHERE shipment_id = ${shipmentId}::uuid
         AND voided_at IS NULL
         AND is_estimate = false
-        AND fee_code NOT IN ('SHIPPING', 'COD', 'RETURN', 'EXCHANGE')
+        AND fee_code NOT IN ('SHIPPING', 'COD', 'RETURN')
     `)
   );
   return BigInt(rows[0]?.total ?? "0");
@@ -191,7 +210,7 @@ async function resolveReturnFee(
 }
 
 /** قراءة إعداد منطقي من جدول الإعدادات */
-async function boolSetting(ex: SqlExecutor, key: string, fallback: boolean): Promise<boolean> {
+export async function boolSetting(ex: SqlExecutor, key: string, fallback: boolean): Promise<boolean> {
   const rows = rowsOf<{ value: unknown }>(
     await ex.execute(sql`SELECT value FROM settings WHERE key = ${key} LIMIT 1`)
   );

@@ -239,6 +239,7 @@ export async function paySettlement(
     method: string;
     reference?: string | null;
     cashFeeP?: Piastres;
+    expediteFeeP?: Piastres;
     branchId?: string | null;
   }
 ): Promise<{ status: string; journalEntryNo: bigint }> {
@@ -272,6 +273,7 @@ export async function paySettlement(
     netPayableP: net,
     method: input.method,
     cashFeeP: input.cashFeeP,
+    expediteFeeP: input.expediteFeeP,
     branchId: input.branchId ?? undefined,
   });
   const posted = await postEntry(ex, entry, { actorUserId: input.actorUserId });
