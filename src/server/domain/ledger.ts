@@ -41,6 +41,10 @@ export const ACC = {
   compensationExpense: (): AccountRef => ({ code: "COMPENSATION_EXPENSE", ownerId: null }),
   cashVariance: (): AccountRef => ({ code: "CASH_VARIANCE", ownerId: null }),
   commissionExpense: (): AccountRef => ({ code: "COMMISSION_EXPENSE", ownerId: null }),
+  fleetExpense: (): AccountRef => ({ code: "FLEET_EXPENSE", ownerId: null }),
+  operatingExpense: (): AccountRef => ({ code: "OPERATING_EXPENSE", ownerId: null }),
+  /** حساب مصروف بالكود (لبنود المصروفات) */
+  expenseByCode: (code: string): AccountRef => ({ code, ownerId: null }),
 } as const;
 
 /**
@@ -613,6 +617,35 @@ export function buildCommissionEntry(i: {
     lines: [
       { account: ACC.commissionExpense(), debitP: total, creditP: 0n, memo: "عمولات مناديب", courierId: i.courierId },
       { account: ACC.courierCommissionPayable(i.courierId), debitP: 0n, creditP: total, memo: "مستحق للمندوب", courierId: i.courierId },
+    ],
+  });
+}
+
+// ---------------------------------------------------------------
+// ٩) مصروف تشغيلي (بند مصروفات / أسطول)
+// ---------------------------------------------------------------
+
+/**
+ * مصروف فعلي: مدين حساب المصروف / دائن مصدر الدفع (خزنة الفرع أو البنك).
+ */
+export function buildExpenseEntry(i: {
+  expenseId: string;
+  code: string;
+  expenseAccountCode: string;
+  amountP: Piastres;
+  paidFrom: "branch_cash" | "bank";
+  branchId: string;
+}): DraftEntry {
+  if (i.amountP <= 0n) throw new Error("مصروف بمبلغ صفر مبيعملش قيد");
+  const source: AccountRef = i.paidFrom === "bank" ? ACC.companyBank() : ACC.branchCash(i.branchId);
+  return entry({
+    descriptionAr: `مصروف — ${i.code}`,
+    sourceType: "manual",
+    sourceId: i.expenseId,
+    kind: "expense",
+    lines: [
+      { account: ACC.expenseByCode(i.expenseAccountCode), debitP: i.amountP, creditP: 0n, memo: `مصروف ${i.code}` },
+      { account: source, debitP: 0n, creditP: i.amountP, memo: `دفع مصروف ${i.code}` },
     ],
   });
 }

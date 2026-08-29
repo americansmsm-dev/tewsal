@@ -30,6 +30,7 @@ import {
   SEED_ACCOUNTS,
   SEED_WORKING_HOURS,
   SEED_RETURN_SHELVES,
+  SEED_EXPENSE_CATEGORIES,
 } from "../src/server/db/seed-data";
 
 // ---------------------------------------------------------------
@@ -331,6 +332,21 @@ async function main() {
         `;
       }
       log("📦", `رفوف المرتجعات: ${SEED_RETURN_SHELVES.length}`);
+
+      // ---------------------------------------------------------
+      // ١٠.٢) بنود المصروفات (لو الجدول موجود)
+      // ---------------------------------------------------------
+      const [hasExpenses] = await tx<{ exists: boolean }[]>`
+        SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='expense_categories') AS exists`;
+      if (hasExpenses?.exists) {
+        for (const c of SEED_EXPENSE_CATEGORIES) {
+          await tx`
+            INSERT INTO expense_categories (code, name_ar, account_code)
+            VALUES (${c.code}, ${c.nameAr}, ${c.accountCode})
+            ON CONFLICT (code) DO NOTHING`;
+        }
+        log("🧾", `بنود المصروفات: ${SEED_EXPENSE_CATEGORIES.length}`);
+      }
 
       // ---------------------------------------------------------
       // ١١) حساب المدير الأول

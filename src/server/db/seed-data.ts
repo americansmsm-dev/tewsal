@@ -445,6 +445,21 @@ export const SEED_ACCOUNTS = [
   { code: "CASH_VARIANCE", nameAr: "فروقات نقدية", type: "expense", ownerType: "company" },
   { code: "COMMISSION_EXPENSE", nameAr: "مصروف عمولات المناديب", type: "expense", ownerType: "company" },
   { code: "FLEET_EXPENSE", nameAr: "مصروف الأسطول (بنزين وصيانة)", type: "expense", ownerType: "company" },
+  { code: "OPERATING_EXPENSE", nameAr: "مصروفات تشغيلية عامة", type: "expense", ownerType: "company" },
+] as const;
+
+// ---------------------------------------------------------------
+// بنود المصروفات (مرحلة هـ)
+// ---------------------------------------------------------------
+
+export const SEED_EXPENSE_CATEGORIES = [
+  { code: "FUEL", nameAr: "بنزين", accountCode: "FLEET_EXPENSE" },
+  { code: "MAINTENANCE", nameAr: "صيانة عربيات", accountCode: "FLEET_EXPENSE" },
+  { code: "RENT", nameAr: "إيجار", accountCode: "OPERATING_EXPENSE" },
+  { code: "SALARIES", nameAr: "مرتبات", accountCode: "OPERATING_EXPENSE" },
+  { code: "UTILITIES", nameAr: "كهرباء ومياه ونت", accountCode: "OPERATING_EXPENSE" },
+  { code: "SUPPLIES", nameAr: "مستلزمات ومكتبية", accountCode: "OPERATING_EXPENSE" },
+  { code: "OTHER", nameAr: "أخرى", accountCode: "OPERATING_EXPENSE" },
 ] as const;
 
 // ---------------------------------------------------------------
