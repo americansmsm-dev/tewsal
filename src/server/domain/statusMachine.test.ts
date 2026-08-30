@@ -247,10 +247,10 @@ describe("الإلغاء والفوترة", () => {
 });
 
 describe("allowedTransitions — لبناء أزرار الواجهة", () => {
-  it("المندوب في out_for_delivery شايف ٣ خيارات", () => {
+  it("المندوب في out_for_delivery شايف ٤ خيارات (منهم مرتجع مباشر)", () => {
     const opts = allowedTransitions("out_for_delivery", "courier");
     const targets = opts.map((t) => t.to).sort();
-    expect(targets).toEqual(["delivered", "delivery_failed", "partially_delivered"]);
+    expect(targets).toEqual(["awaiting_return", "delivered", "delivery_failed", "partially_delivered"]);
   });
 
   it("التاجر مالوش خيارات على شحنة في المخزن", () => {

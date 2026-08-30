@@ -78,6 +78,8 @@ const bodySchema = z.object({
 
   // المتطلبات
   reasonCode: z.string().max(40).optional(),
+  /** تاريخ إعادة المحاولة لو مؤجل (مع تعذّر التسليم) */
+  rescheduledAt: z.string().datetime().nullable().optional(),
   note: z.string().max(2000).optional(),
   receiverName: z.string().max(120).optional(),
   photoUrl: z.string().max(500).optional(),
@@ -189,6 +191,14 @@ export async function POST(
         userAgent: ctx.userAgent,
         requestId: ctx.requestId,
       });
+
+      // تأجيل: نخزّن تاريخ إعادة المحاولة على الشحنة (مع تعذّر التسليم)
+      if (!res.idempotentReplay && b.rescheduledAt) {
+        await tx.execute(sql`
+          UPDATE shipments SET rescheduled_at = ${b.rescheduledAt}::timestamptz
+          WHERE id = ${shipmentId}::uuid
+        `);
+      }
 
       // ⚠️ مفقود/تالف بيفتح مطالبة تلقائيًا (بدون قيد فوري) —
       //    جوه نفس الترانزاكشن، والبوابة نفسها مش بتتلمس.

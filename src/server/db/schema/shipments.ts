@@ -145,6 +145,8 @@ export const shipments = pgTable(
     /** بتتحسب مرة واحدة عند دخول المخزن بـ addWorkingTime() */
     promisedAt: timestamp("promised_at", { withTimezone: true }),
     deliveredAt: timestamp("delivered_at", { withTimezone: true }),
+    /** تاريخ إعادة المحاولة لو المندوب أجّل التسليم */
+    rescheduledAt: timestamp("rescheduled_at", { withTimezone: true }),
     firstAssignedAt: timestamp("first_assigned_at", { withTimezone: true }),
 
     // --- التشغيل ---

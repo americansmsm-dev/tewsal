@@ -66,6 +66,7 @@ export function TransitionModal({
   const [codCollected, setCodCollected] = useState("");
   const [codMethod, setCodMethod] = useState("cash");
   const [reasonCode, setReasonCode] = useState("");
+  const [rescheduledAt, setRescheduledAt] = useState(""); // مؤجل لحد (تاريخ)
   const [note, setNote] = useState("");
   const [courierId, setCourierId] = useState("");
   const [receiverName, setReceiverName] = useState("");
@@ -120,8 +121,15 @@ export function TransitionModal({
     });
   }, [shipmentId]);
 
+  const isDelivery = toStatus === "delivered" || toStatus === "partially_delivered";
+
   async function submit() {
     if (!toStatus) return;
+    // 📷 صورة إثبات التسليم إجبارية — المندوب مايسلّمش من غير صورة
+    if (isDelivery && !photoKey) {
+      setError("لازم تصوّر إثبات التسليم قبل ما تسلّم الأوردر 📷");
+      return;
+    }
     setError(null);
     setBusy(true);
 
@@ -135,6 +143,9 @@ export function TransitionModal({
       body.cod = { collected: codCollected, method: codMethod };
     }
     if (requires.includes("reason_code")) body.reasonCode = reasonCode;
+    if (rescheduledAt && toStatus === "delivery_failed") {
+      body.rescheduledAt = new Date(rescheduledAt + "T12:00:00").toISOString();
+    }
     if (note) body.note = note;
     if (receiverName) body.receiverName = receiverName;
     // متطلبات الإسناد/التحميل — بنولّد مرجع مؤقت للبيك أب/الكشف
@@ -272,6 +283,16 @@ export function TransitionModal({
               </option>
             ))}
           </select>
+          {/* مؤجل: تاريخ إعادة المحاولة */}
+          <div style={{ marginTop: 8 }}>
+            <label className="label">مؤجل لحد (اختياري)</label>
+            <input
+              className="input" type="date" value={rescheduledAt}
+              onChange={(e) => setRescheduledAt(e.target.value)}
+              min={new Date().toISOString().slice(0, 10)} style={{ width: "100%" }}
+            />
+            {rescheduledAt && <div style={{ fontSize: "0.75rem", color: "var(--color-warning)", marginTop: 4 }}>هيتسجّل مؤجل لـ {rescheduledAt}</div>}
+          </div>
         </div>
       )}
 
@@ -298,7 +319,7 @@ export function TransitionModal({
 
       {showPhoto && (
         <div style={{ marginBottom: "0.9rem" }}>
-          <label className="label">صورة إثبات {requires.includes("signature") ? "" : "(اختياري)"}</label>
+          <label className="label">صورة إثبات {isDelivery || requires.includes("signature") ? "(إجباري)" : "(اختياري)"}</label>
           <input
             ref={fileRef}
             type="file"
@@ -324,7 +345,7 @@ export function TransitionModal({
               {photoBusy ? "جاري الرفع..." : "📷 التقاط صورة"}
             </button>
           )}
-          {photoErr && <div style={{ marginTop: 6, fontSize: "0.78rem", color: "var(--muted)" }}>⚠️ {photoErr} — تقدر تكمّل التسليم من غير صورة</div>}
+          {photoErr && <div style={{ marginTop: 6, fontSize: "0.78rem", color: "var(--muted)" }}>⚠️ {photoErr}{isDelivery ? " — لازم تعيد المحاولة، الصورة إجبارية" : " — تقدر تكمّل من غير صورة"}</div>}
         </div>
       )}
 

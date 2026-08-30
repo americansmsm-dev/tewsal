@@ -31,7 +31,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
                s.cod_amount_p::text AS cod_amount_p, s.payment_method, s.shipping_payer,
                s.pieces_count, s.is_fragile, s.fragile_insured, s.notes_to_courier,
                s.price_p::text AS price_p, s.total_fees_p::text AS total_fees_p,
-               s.merchant_reference, s.created_at,
+               s.merchant_reference, s.created_at, s.rescheduled_at, s.delivered_at, s.is_wallet_order,
                g.name_ar AS governorate, z.name_ar AS zone, a.name_ar AS area,
                m.name_ar AS merchant_name, m.code AS merchant_code, m.phone AS merchant_phone
         FROM shipments s

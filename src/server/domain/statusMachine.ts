@@ -260,6 +260,14 @@ export const TRANSITIONS: Record<ShipmentStatus, readonly Transition[]> = {
       label: "تعذّر التسليم",
     },
     {
+      // المندوب يقدر يعلّم الأوردر مرتجع مباشرة (رفض العميل الاستلام كليًا).
+      // مفيش قيد مالي هنا — الشحن بيتحاسب عند returned_to_merchant.
+      to: "awaiting_return",
+      roles: ["courier", "ops", "branch_manager", "super_admin"],
+      requires: ["reason_code"],
+      label: "مرتجع (رفض الاستلام)",
+    },
+    {
       to: "on_hold",
       roles: ["branch_manager", "super_admin"],
       requires: ["note"],

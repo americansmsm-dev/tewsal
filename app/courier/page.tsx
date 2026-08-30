@@ -9,6 +9,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { TransitionModal } from "../components/TransitionModal";
+import { OrderDetailModal, LabelModal } from "../components/OrderModals";
 import { InstallPrompt } from "../components/InstallPrompt";
 import { apiCall, toArabicDigits, type ShipmentStatus, type Role } from "../lib/client";
 import { outboxCount, flushOutbox } from "../lib/outbox";
@@ -39,6 +40,8 @@ export default function CourierApp() {
   const [sum, setSum] = useState<Summary | null>(null);
   const [loading, setLoading] = useState(true);
   const [active, setActive] = useState<Task | null>(null);
+  const [detailTask, setDetailTask] = useState<Task | null>(null);
+  const [labelId, setLabelId] = useState<string | null>(null);
   const [att, setAtt] = useState<{ checkedIn: boolean; checkedOut: boolean } | null>(null);
   const [pending, setPending] = useState(0);
 
@@ -69,7 +72,8 @@ export default function CourierApp() {
   }, [load]);
 
   useEffect(() => {
-    if (!att?.checkedIn || !navigator.geolocation) return;
+    // التتبّع بيشتغل بس وهو حاضر ولسه ماعملش انصراف — بيقف فورًا بالانصراف
+    if (!att?.checkedIn || att?.checkedOut || !navigator.geolocation) return;
     function ping() {
       navigator.geolocation.getCurrentPosition(
         (pos) => { apiCall("POST", "/api/v1/courier/field", { action: "location", lat: pos.coords.latitude, lng: pos.coords.longitude }); },
@@ -79,7 +83,7 @@ export default function CourierApp() {
     ping();
     const iv = setInterval(ping, 120000);
     return () => clearInterval(iv);
-  }, [att?.checkedIn]);
+  }, [att?.checkedIn, att?.checkedOut]);
 
   useEffect(() => {
     apiCall<{ user: Me }>("GET", "/api/v1/auth/me").then((r) => {
@@ -89,6 +93,12 @@ export default function CourierApp() {
       load();
     });
   }, [router, load]);
+
+  // تحديث فوري تلقائي كل ٢٥ ثانية (وهو ظاهر بس)
+  useEffect(() => {
+    const iv = setInterval(() => { if (document.visibilityState === "visible") load(); }, 25000);
+    return () => clearInterval(iv);
+  }, [load]);
 
   async function logout() {
     await apiCall("POST", "/api/v1/auth/logout");
@@ -110,7 +120,7 @@ export default function CourierApp() {
 
       <main style={{ padding: "1rem" }}>
         {tab === "home" && <HomeTab me={me} sum={sum} att={att} tasks={tasks} attend={attend} goTasks={() => setTab("tasks")} loading={loading} />}
-        {tab === "tasks" && <TasksTab tasks={tasks} loading={loading} onPick={setActive} />}
+        {tab === "tasks" && <TasksTab tasks={tasks} loading={loading} onPick={setActive} onDetail={setDetailTask} />}
         {tab === "custody" && <CustodyTab sum={sum} />}
         {tab === "earnings" && <EarningsTab sum={sum} />}
         {tab === "profile" && <ProfileTab me={me} att={att} logout={logout} />}
@@ -141,6 +151,15 @@ export default function CourierApp() {
           onClose={() => setActive(null)} onDone={() => { setActive(null); load(); }}
         />
       )}
+      {detailTask && (
+        <OrderDetailModal
+          shipmentId={detailTask.id}
+          onClose={() => setDetailTask(null)}
+          onAction={() => { setActive(detailTask); setDetailTask(null); }}
+          onLabel={() => { setLabelId(detailTask.id); setDetailTask(null); }}
+        />
+      )}
+      {labelId && <LabelModal shipmentId={labelId} onClose={() => setLabelId(null)} />}
     </div>
   );
 }
@@ -203,7 +222,7 @@ function Stat({ icon, label, value, tone }: { icon: string; label: string; value
 }
 
 // ─────────────────────────── مهامي ───────────────────────────
-function TasksTab({ tasks, loading, onPick }: { tasks: Task[]; loading: boolean; onPick: (t: Task) => void }) {
+function TasksTab({ tasks, loading, onPick, onDetail }: { tasks: Task[]; loading: boolean; onPick: (t: Task) => void; onDetail: (t: Task) => void }) {
   return (
     <div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.75rem" }}>
@@ -222,9 +241,9 @@ function TasksTab({ tasks, loading, onPick }: { tasks: Task[]; loading: boolean;
             const hasCod = BigInt(t.cod_amount_p || "0") > 0n;
             return (
               <div key={t.id} className="card" style={{ padding: "1rem" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+                <div onClick={() => onDetail(t)} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8, cursor: "pointer" }}>
                   <div>
-                    <div style={{ fontWeight: 800, fontSize: "1.05rem" }}>{t.recipient_name}</div>
+                    <div style={{ fontWeight: 800, fontSize: "1.05rem" }}>{t.recipient_name} <span style={{ fontSize: "0.75rem", color: "var(--color-orange-600)", fontWeight: 700 }}>ℹ️ تفاصيل</span></div>
                     <div style={{ fontSize: "0.85rem", color: "var(--muted)" }}>{t.governorate} · {t.address_line}</div>
                     {t.landmark && <div style={{ fontSize: "0.78rem", color: "var(--muted)" }}>📍 {t.landmark}</div>}
                   </div>

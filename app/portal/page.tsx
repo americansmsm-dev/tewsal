@@ -8,10 +8,10 @@
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { CreateShipmentModal } from "../components/CreateShipmentModal";
 import { WalletPanel } from "../components/WalletPanel";
 import { InstallPrompt } from "../components/InstallPrompt";
+import { OrderDetailModal, LabelModal } from "../components/OrderModals";
 import { apiCall, STATUS_LABELS_AR, statusTone, toneStyle, toArabicDigits, type ShipmentStatus } from "../lib/client";
 
 interface Me { id: string; name: string; role: string; merchantId: string | null; }
@@ -42,6 +42,8 @@ export default function PortalPage() {
   const [rows, setRows] = useState<ShipmentRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
+  const [detailId, setDetailId] = useState<string | null>(null);
+  const [labelId, setLabelId] = useState<string | null>(null);
 
   const loadData = useCallback(async (merchantId: string) => {
     const [s, list] = await Promise.all([
@@ -67,6 +69,13 @@ export default function PortalPage() {
     await apiCall("POST", "/api/v1/auth/logout");
     router.replace("/login");
   }
+
+  // تحديث فوري تلقائي كل ٢٥ ثانية
+  useEffect(() => {
+    if (!me?.merchantId) return;
+    const iv = setInterval(() => { if (document.visibilityState === "visible") loadData(me.merchantId!); }, 25000);
+    return () => clearInterval(iv);
+  }, [me?.merchantId, loadData]);
 
   const stats = useMemo(() => {
     const s = { total: rows.length, active: 0, delivered: 0, returns: 0 };
@@ -95,9 +104,9 @@ export default function PortalPage() {
 
       <main style={{ padding: "1.1rem" }}>
         {tab === "home" && <HomeTab me={me} st={st} stats={stats} onCreate={() => setShowCreate(true)} goShip={() => setTab("shipments")} />}
-        {tab === "shipments" && <ShipmentsTab rows={rows} loading={loading} onCreate={() => setShowCreate(true)} />}
+        {tab === "shipments" && <ShipmentsTab rows={rows} loading={loading} onCreate={() => setShowCreate(true)} onDetail={setDetailId} onLabel={setLabelId} />}
         {tab === "account" && <AccountTab me={me} st={st} />}
-        {tab === "returns" && <ReturnsTab rows={rows} />}
+        {tab === "returns" && <ReturnsTab rows={rows} onDetail={setDetailId} />}
         {tab === "profile" && <ProfileTab me={me} rows={rows} onDone={refresh} logout={logout} />}
       </main>
 
@@ -125,6 +134,14 @@ export default function PortalPage() {
           onDone={() => { setShowCreate(false); refresh(); }}
         />
       )}
+      {detailId && (
+        <OrderDetailModal
+          shipmentId={detailId}
+          onClose={() => setDetailId(null)}
+          onLabel={() => { setLabelId(detailId); setDetailId(null); }}
+        />
+      )}
+      {labelId && <LabelModal shipmentId={labelId} onClose={() => setLabelId(null)} />}
     </div>
   );
 }
@@ -182,7 +199,7 @@ function MStat({ icon, label, value, tone, onClick }: { icon: string; label: str
 }
 
 // ─────────────────────────── شحناتي ───────────────────────────
-function ShipmentsTab({ rows, loading, onCreate }: { rows: ShipmentRow[]; loading: boolean; onCreate: () => void }) {
+function ShipmentsTab({ rows, loading, onCreate, onDetail, onLabel }: { rows: ShipmentRow[]; loading: boolean; onCreate: () => void; onDetail: (id: string) => void; onLabel: (id: string) => void }) {
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<"all" | "active" | "delivered" | "returns">("all");
 
@@ -232,9 +249,9 @@ function ShipmentsTab({ rows, loading, onCreate }: { rows: ShipmentRow[]; loadin
             const hasCod = BigInt(s.cod_amount_p || "0") > 0n;
             return (
               <div key={s.id} className="card" style={{ padding: "0.85rem 1rem" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+                <div onClick={() => onDetail(s.id)} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8, cursor: "pointer" }}>
                   <div style={{ minWidth: 0 }}>
-                    <div style={{ fontWeight: 800 }}>{s.recipient_name}</div>
+                    <div style={{ fontWeight: 800 }}>{s.recipient_name} <span style={{ fontSize: "0.72rem", color: "var(--color-orange-600)", fontWeight: 700 }}>ℹ️</span></div>
                     <div style={{ fontSize: "0.8rem", color: "var(--muted)" }}>{s.governorate} · <span dir="ltr">{s.recipient_phone}</span></div>
                     <div dir="ltr" style={{ fontSize: "0.72rem", color: "var(--muted)", fontWeight: 700, textAlign: "right" }}>{s.awb}</div>
                   </div>
@@ -244,7 +261,7 @@ function ShipmentsTab({ rows, loading, onCreate }: { rows: ShipmentRow[]; loadin
                   <span style={{ fontWeight: 800, color: hasCod ? "var(--color-orange-600)" : "var(--muted)" }}>
                     {hasCod ? egp(s.cod_amount_p) : "بدون تحصيل"}
                   </span>
-                  <Link href={`/shipments/${s.id}/label`} target="_blank" className="btn btn-ghost" style={{ padding: "0.3rem 0.7rem", fontSize: "0.8rem" }}>🖨️ بوليصة</Link>
+                  <button onClick={() => onLabel(s.id)} className="btn btn-ghost" style={{ padding: "0.3rem 0.7rem", fontSize: "0.8rem" }}>🖨️ بوليصة</button>
                 </div>
               </div>
             );
@@ -297,7 +314,7 @@ function AccountTab({ me, st }: { me: Me; st: Statement | null }) {
 }
 
 // ─────────────────────────── المرتجعات ───────────────────────────
-function ReturnsTab({ rows }: { rows: ShipmentRow[] }) {
+function ReturnsTab({ rows, onDetail }: { rows: ShipmentRow[]; onDetail: (id: string) => void }) {
   const returns = rows.filter((r) => RETURN_STATUSES.includes(r.status));
   return (
     <div>
@@ -311,9 +328,9 @@ function ReturnsTab({ rows }: { rows: ShipmentRow[] }) {
           {returns.map((s) => {
             const tone = toneStyle(statusTone(s.status));
             return (
-              <div key={s.id} className="card" style={{ padding: "0.85rem 1rem", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div key={s.id} onClick={() => onDetail(s.id)} className="card" style={{ padding: "0.85rem 1rem", display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }}>
                 <div>
-                  <div style={{ fontWeight: 800 }}>{s.recipient_name}</div>
+                  <div style={{ fontWeight: 800 }}>{s.recipient_name} <span style={{ fontSize: "0.72rem", color: "var(--color-orange-600)", fontWeight: 700 }}>ℹ️</span></div>
                   <div dir="ltr" style={{ fontSize: "0.72rem", color: "var(--muted)", fontWeight: 700, textAlign: "right" }}>{s.awb}</div>
                 </div>
                 <span className="badge" style={tone}>{STATUS_LABELS_AR[s.status]}</span>
