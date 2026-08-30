@@ -9,6 +9,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { TransitionModal } from "../components/TransitionModal";
+import { InstallPrompt } from "../components/InstallPrompt";
 import { apiCall, toArabicDigits, type ShipmentStatus, type Role } from "../lib/client";
 import { outboxCount, flushOutbox } from "../lib/outbox";
 
@@ -100,6 +101,7 @@ export default function CourierApp() {
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg-soft)", maxWidth: 520, margin: "0 auto" }}>
+      <InstallPrompt />
       <header style={{ background: "var(--color-navy-900)", color: "#fff", padding: "0.85rem 1rem", display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 10 }}>
         <div>
           <div style={{ fontSize: "1.2rem", fontWeight: 800 }}>توص<span style={{ color: "var(--color-orange-500)" }}>ّل</span></div>

@@ -10,6 +10,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { CreateShipmentModal } from "../components/CreateShipmentModal";
 import { WalletPanel } from "../components/WalletPanel";
+import { InstallPrompt } from "../components/InstallPrompt";
 import { apiCall, STATUS_LABELS_AR, statusTone, toneStyle, toArabicDigits, type ShipmentStatus } from "../lib/client";
 
 interface Me {
@@ -74,6 +75,7 @@ export default function PortalPage() {
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg-soft)" }}>
+      <InstallPrompt />
       {/* هيدر التاجر */}
       <header style={{ background: "var(--color-navy-900)", color: "#fff", padding: "0.85rem 1.25rem", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
