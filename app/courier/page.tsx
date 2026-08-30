@@ -26,7 +26,19 @@ interface Summary {
   cashInHand: string; commissions: string; receivable: string; receivableP: string;
   today: { delivered: number; failed: number; outForDelivery: number; successRate: number | null };
 }
+interface WorkHours { start: string | null; end: string | null; autoCheckout: boolean }
 type Tab = "home" | "tasks" | "custody" | "earnings" | "profile";
+
+/** وقت القاهرة HH:MM دلوقتي */
+function cairoNow(): string {
+  return new Intl.DateTimeFormat("en-GB", { timeZone: "Africa/Cairo", hour12: false, hour: "2-digit", minute: "2-digit" }).format(new Date());
+}
+/** هل دلوقتي داخل ساعات العمل؟ (لو مفيش ساعات محددة = دايمًا نعم) */
+function withinHours(w: WorkHours | null): boolean {
+  if (!w?.start || !w?.end) return true;
+  const now = cairoNow();
+  return now >= w.start && now <= w.end;
+}
 
 function egp(p: string): string {
   const v = BigInt(p || "0");
@@ -44,17 +56,20 @@ export default function CourierApp() {
   const [detailTask, setDetailTask] = useState<Task | null>(null);
   const [labelId, setLabelId] = useState<string | null>(null);
   const [att, setAtt] = useState<{ checkedIn: boolean; checkedOut: boolean } | null>(null);
+  const [work, setWork] = useState<WorkHours | null>(null);
   const [pending, setPending] = useState(0);
 
   const load = useCallback(async () => {
-    const [t, s, a] = await Promise.all([
+    const [t, s, a, w] = await Promise.all([
       apiCall<{ shipments: Task[] }>("GET", "/api/v1/shipments?status=out_for_delivery&limit=100"),
       apiCall<Summary>("GET", "/api/v1/courier/summary"),
       apiCall<{ checkedIn: boolean; checkedOut: boolean }>("GET", "/api/v1/courier/field"),
+      apiCall<WorkHours>("GET", "/api/v1/settings/work-hours"),
     ]);
     if (t.ok) setTasks(t.data?.shipments ?? []);
     if (s.ok) setSum(s.data);
     if (a.ok) setAtt(a.data);
+    if (w.ok) setWork(w.data);
     setPending(outboxCount());
     setLoading(false);
   }, []);
@@ -76,6 +91,11 @@ export default function CourierApp() {
     // التتبّع بيشتغل بس وهو حاضر ولسه ماعملش انصراف — بيقف فورًا بالانصراف
     if (!att?.checkedIn || att?.checkedOut || !navigator.geolocation) return;
     function ping() {
+      // برّه ساعات العمل: نوقف التتبّع، وننصرف تلقائي لو المدير مفعّلها
+      if (!withinHours(work)) {
+        if (work?.autoCheckout && work.end && cairoNow() > work.end) attend("check_out");
+        return;
+      }
       navigator.geolocation.getCurrentPosition(
         (pos) => { apiCall("POST", "/api/v1/courier/field", { action: "location", lat: pos.coords.latitude, lng: pos.coords.longitude }); },
         () => {}, { enableHighAccuracy: false, maximumAge: 60000, timeout: 10000 }
@@ -84,7 +104,8 @@ export default function CourierApp() {
     ping();
     const iv = setInterval(ping, 120000);
     return () => clearInterval(iv);
-  }, [att?.checkedIn, att?.checkedOut]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [att?.checkedIn, att?.checkedOut, work?.start, work?.end, work?.autoCheckout]);
 
   useEffect(() => {
     apiCall<{ user: Me }>("GET", "/api/v1/auth/me").then((r) => {
@@ -120,7 +141,7 @@ export default function CourierApp() {
       </header>
 
       <main style={{ padding: "1rem" }}>
-        {tab === "home" && <HomeTab me={me} sum={sum} att={att} tasks={tasks} attend={attend} goTasks={() => setTab("tasks")} loading={loading} />}
+        {tab === "home" && <HomeTab me={me} sum={sum} att={att} work={work} tasks={tasks} attend={attend} goTasks={() => setTab("tasks")} loading={loading} />}
         {tab === "tasks" && <TasksTab tasks={tasks} loading={loading} onPick={setActive} onDetail={setDetailTask} />}
         {tab === "custody" && <CustodyTab sum={sum} />}
         {tab === "earnings" && <EarningsTab sum={sum} />}
@@ -169,13 +190,19 @@ const TAB_LABELS: Record<Tab, string> = { home: "الرئيسية", tasks: "مه
 const TAB_ICONS: Record<Tab, string> = { home: "🏠", tasks: "📋", custody: "💵", earnings: "💰", profile: "👤" };
 
 // ─────────────────────────── الرئيسية ───────────────────────────
-function HomeTab({ me, sum, att, tasks, attend, goTasks, loading }: {
+function HomeTab({ me, sum, att, work, tasks, attend, goTasks, loading }: {
   me: Me; sum: Summary | null; att: { checkedIn: boolean; checkedOut: boolean } | null;
-  tasks: Task[]; attend: (a: "check_in" | "check_out") => void; goTasks: () => void; loading: boolean;
+  work: WorkHours | null; tasks: Task[]; attend: (a: "check_in" | "check_out") => void; goTasks: () => void; loading: boolean;
 }) {
   return (
     <div style={{ display: "grid", gap: 14 }}>
       <div style={{ fontSize: "1.05rem", fontWeight: 800 }}>أهلًا {me.name} 👋</div>
+
+      {work?.start && work?.end && (
+        <div style={{ fontSize: "0.8rem", color: "var(--muted)", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 10, padding: "0.5rem 0.8rem" }}>
+          🕐 ساعات العمل: {work.start} — {work.end}{work.autoCheckout ? " · انصراف تلقائي بالنهاية" : ""}
+        </div>
+      )}
 
       {/* الحضور */}
       <div className="card" style={{ padding: "0.9rem 1.1rem", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
