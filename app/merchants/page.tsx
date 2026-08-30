@@ -9,6 +9,7 @@ import { AppHeader } from "../components/AppHeader";
 import { AppNav } from "../components/AppNav";
 import { Overlay, ErrorBox } from "../components/TransitionModal";
 import { useCurrentUser } from "../lib/useCurrentUser";
+import { useDebounce } from "../lib/useDebounce";
 import { apiCall } from "../lib/client";
 
 interface Merchant {
@@ -32,15 +33,16 @@ export default function MerchantsPage() {
   const [merchants, setMerchants] = useState<Merchant[]>([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
+  const dq = useDebounce(q, 350);
   const [showCreate, setShowCreate] = useState(false);
 
   const load = useCallback(async () => {
     const params = new URLSearchParams();
-    if (q) params.set("q", q);
+    if (dq) params.set("q", dq);
     const r = await apiCall<{ merchants: Merchant[] }>("GET", `/api/v1/merchants?${params}`);
     if (r.ok) setMerchants(r.data?.merchants ?? []);
     setLoading(false);
-  }, [q]);
+  }, [dq]);
 
   useEffect(() => {
     if (user) load();

@@ -10,6 +10,7 @@ import Link from "next/link";
 import { AppHeader } from "./components/AppHeader";
 import { AppNav } from "./components/AppNav";
 import { useCurrentUser } from "./lib/useCurrentUser";
+import { useDebounce } from "./lib/useDebounce";
 import { CreateShipmentModal } from "./components/CreateShipmentModal";
 import { TransitionModal } from "./components/TransitionModal";
 import { ShipmentDetailsModal } from "./components/ShipmentDetailsModal";
@@ -61,6 +62,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<ShipmentStatus | "">("");
   const [q, setQ] = useState("");
+  const dq = useDebounce(q, 350); // البحث بيتأجّل عشان مايعملش طلب مع كل حرف
   const [showCreate, setShowCreate] = useState(false);
   const [active, setActive] = useState<ShipmentRow | null>(null);
   const [details, setDetails] = useState<ShipmentRow | null>(null);
@@ -68,14 +70,14 @@ export default function Dashboard() {
   const load = useCallback(async () => {
     const params = new URLSearchParams();
     if (filter) params.set("status", filter);
-    if (q) params.set("q", q);
+    if (dq) params.set("q", dq);
     const r = await apiCall<{ shipments: ShipmentRow[] }>(
       "GET",
       `/api/v1/shipments?${params.toString()}`
     );
     if (r.ok) setRows(r.data?.shipments ?? []);
     setLoading(false);
-  }, [filter, q]);
+  }, [filter, dq]);
 
   useEffect(() => {
     if (user) load();
@@ -108,15 +110,23 @@ export default function Dashboard() {
             marginBottom: "1rem",
           }}
         >
-          <h2 style={{ margin: 0, fontSize: "1.15rem", marginInlineEnd: "auto" }}>الشحنات</h2>
-          <input
-            className="input"
-            placeholder="بحث بالبوليصة أو الاسم أو التليفون..."
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && load()}
-            style={{ maxWidth: 300 }}
-          />
+          <h2 style={{ margin: 0, fontSize: "1.15rem", marginInlineEnd: "auto" }}>
+            الشحنات {!loading && <span style={{ fontSize: "0.85rem", color: "var(--muted)", fontWeight: 600 }}>({rows.length})</span>}
+          </h2>
+          <div style={{ position: "relative", maxWidth: 300, flex: "1 1 220px" }}>
+            <input
+              className="input"
+              placeholder="بحث بالبوليصة أو الاسم أو التليفون..."
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && load()}
+              style={{ width: "100%", paddingInlineEnd: q ? 30 : undefined }}
+            />
+            {q && (
+              <button onClick={() => setQ("")} aria-label="مسح البحث"
+                style={{ position: "absolute", insetInlineEnd: 6, top: "50%", transform: "translateY(-50%)", background: "transparent", border: 0, cursor: "pointer", color: "var(--muted)", fontSize: "1rem" }}>✕</button>
+            )}
+          </div>
           {canCreate && (
             <button className="btn btn-primary" onClick={() => setShowCreate(true)}>
               + شحنة جديدة
