@@ -44,6 +44,13 @@ const createSchema = z.object({
   notesToCourier: z.string().max(1000).nullable().optional(),
   productId: z.string().uuid().nullable().optional(),
   productQty: z.number().int().positive().optional(),
+  // قطع الأوردر — للتسليم الجزئي بالقطعة (التحصيل = مجموع أسعارها)
+  items: z.array(z.object({
+    nameAr: z.string().min(1).max(160),
+    sku: z.string().max(60).nullable().optional(),
+    qty: z.number().int().positive().max(1000).optional(),
+    price: moneyString,
+  })).max(50).optional(),
   confirm: z.boolean().optional(),
 });
 

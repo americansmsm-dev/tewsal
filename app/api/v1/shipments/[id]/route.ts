@@ -51,11 +51,23 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       return handleError(notFound("الشحنة مش موجودة"));
     }
 
+    // قطع الأوردر (للتسليم الجزئي بالقطعة)
+    const items = rowsOf<{ id: string; name_ar: string; sku: string | null; qty: number; unit_price_p: string; status: string }>(
+      await db.execute(sql`
+        SELECT id, name_ar, sku, qty, unit_price_p::text, status
+        FROM shipment_items WHERE shipment_id = ${id}::uuid ORDER BY created_at ASC
+      `)
+    );
+
     return ok({
       shipment: {
         ...s,
         codAmount: formatEGP(BigInt((s.cod_amount_p as string) || "0")),
       },
+      items: items.map((it) => ({
+        id: it.id, nameAr: it.name_ar, sku: it.sku, qty: it.qty,
+        unitPriceP: it.unit_price_p, price: formatEGP(BigInt(it.unit_price_p || "0")), status: it.status,
+      })),
     });
   } catch (err) {
     return handleError(err);

@@ -27,6 +27,16 @@ interface ReasonCode {
   code: string;
   name_ar: string;
 }
+interface Item {
+  id: string;
+  nameAr: string;
+  qty: number;
+  unitPriceP: string;
+  price: string;
+  status: string;
+}
+/** الحالات اللي بيظهر معاها اختيار القطع (لو الأوردر متقسّم) */
+const ITEM_STATES = new Set<ShipmentStatus>(["delivered", "partially_delivered"]);
 
 export function TransitionModal({
   shipmentId,
@@ -59,6 +69,14 @@ export function TransitionModal({
   const [note, setNote] = useState("");
   const [courierId, setCourierId] = useState("");
   const [receiverName, setReceiverName] = useState("");
+
+  // قطع الأوردر — للتسليم الجزئي بالقطعة
+  const [items, setItems] = useState<Item[]>([]);
+  const [deliveredIds, setDeliveredIds] = useState<Set<string>>(new Set());
+  const useItems = items.length > 0 && !!toStatus && ITEM_STATES.has(toStatus as ShipmentStatus);
+  const itemsTotal = items
+    .filter((it) => deliveredIds.has(it.id))
+    .reduce((s, it) => s + Number(BigInt(it.unitPriceP)) * it.qty, 0) / 100;
 
   // صورة الإثبات
   const [photoKey, setPhotoKey] = useState<string | null>(null);
@@ -94,7 +112,13 @@ export function TransitionModal({
     apiCall<{ reasonCodes: ReasonCode[] }>("GET", "/api/v1/reason-codes").then((r) =>
       setReasons(r.data?.reasonCodes ?? [])
     );
-  }, []);
+    // قطع الأوردر (لو موجودة) — عشان اختيار المتسلّم
+    apiCall<{ items: Item[] }>("GET", `/api/v1/shipments/${shipmentId}`).then((r) => {
+      const its = r.data?.items ?? [];
+      setItems(its);
+      setDeliveredIds(new Set(its.map((it) => it.id))); // الافتراضي: الكل اتسلّم
+    });
+  }, [shipmentId]);
 
   async function submit() {
     if (!toStatus) return;
@@ -102,7 +126,14 @@ export function TransitionModal({
     setBusy(true);
 
     const body: Record<string, unknown> = { to: toStatus, expectedStatus: currentStatus };
-    if (requires.includes("cod_amount")) body.cod = { collected: codCollected, method: codMethod };
+    if (useItems) {
+      // التسليم بالقطعة: السيرفر بيحسب التحصيل من المتسلّم ويحدّد
+      // كلي/جزئي، فبنبعت القطع المتسلّمة + الطريقة بس.
+      body.deliveredItemIds = [...deliveredIds];
+      body.cod = { collected: itemsTotal.toFixed(2), method: codMethod };
+    } else if (requires.includes("cod_amount")) {
+      body.cod = { collected: codCollected, method: codMethod };
+    }
     if (requires.includes("reason_code")) body.reasonCode = reasonCode;
     if (note) body.note = note;
     if (receiverName) body.receiverName = receiverName;
@@ -165,7 +196,46 @@ export function TransitionModal({
         ))}
       </select>
 
-      {requires.includes("cod_amount") && (
+      {/* التسليم بالقطعة — العميل بياخد اللي عايزه، والباقي مرتجع */}
+      {useItems && (
+        <div style={{ marginBottom: "0.9rem", padding: "0.7rem", background: "var(--bg-soft)", borderRadius: 12 }}>
+          <div style={{ fontSize: "0.82rem", fontWeight: 700, marginBottom: 6 }}>
+            🧩 علّم اللي العميل استلمه (الباقي هيترجّع)
+          </div>
+          {items.map((it) => (
+            <label key={it.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "0.35rem 0", cursor: "pointer" }}>
+              <input
+                type="checkbox"
+                checked={deliveredIds.has(it.id)}
+                onChange={(e) => setDeliveredIds((prev) => {
+                  const n = new Set(prev);
+                  if (e.target.checked) n.add(it.id); else n.delete(it.id);
+                  return n;
+                })}
+                style={{ width: 18, height: 18 }}
+              />
+              <span style={{ flex: 1, fontSize: "0.9rem" }}>
+                {it.nameAr} {it.qty > 1 ? `×${it.qty}` : ""}
+              </span>
+              <span dir="ltr" style={{ fontSize: "0.85rem", fontWeight: 700 }}>{it.price}</span>
+            </label>
+          ))}
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, borderTop: "1px solid var(--border)", paddingTop: 8 }}>
+            <span style={{ fontSize: "0.82rem", fontWeight: 700, flex: 1 }}>
+              المحصّل: <span style={{ color: "var(--color-orange-600)" }}>{itemsTotal.toFixed(2)} ج</span>
+              {deliveredIds.size < items.length && <span style={{ color: "var(--color-warning)", fontWeight: 700 }}> · تسليم جزئي</span>}
+            </span>
+            <select className="input" value={codMethod} onChange={(e) => setCodMethod(e.target.value)} style={{ width: 140 }}>
+              <option value="cash">كاش</option>
+              <option value="vodafone_cash">فودافون كاش</option>
+              <option value="instapay">إنستاباي</option>
+              <option value="prepaid">مدفوع مقدمًا</option>
+            </select>
+          </div>
+        </div>
+      )}
+
+      {!useItems && requires.includes("cod_amount") && (
         <div style={{ display: "flex", gap: 8, marginBottom: "0.9rem" }}>
           <div style={{ flex: 1 }}>
             <label className="label">المبلغ المحصّل (ج)</label>

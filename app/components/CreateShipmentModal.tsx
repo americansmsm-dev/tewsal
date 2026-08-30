@@ -38,6 +38,7 @@ export function CreateShipmentModal({
   const [result, setResult] = useState<{ awb: string; price: string; totalFees: string } | null>(null);
 
   const [showMore, setShowMore] = useState(false);
+  const [items, setItems] = useState<{ nameAr: string; price: string; qty: string }[]>([]);
   const [lookup, setLookup] = useState<{ blacklisted: boolean; blacklistReason: string | null; total: number; successRate: number; lastNames: string[] } | null>(null);
   const [f, setF] = useState({
     merchantId: lockedMerchantId ?? "",
@@ -108,6 +109,11 @@ export function CreateShipmentModal({
     if (f.merchantReference) body.merchantReference = f.merchantReference;
     if (f.notesToCourier) body.notesToCourier = f.notesToCourier;
     if (f.isFragile) { body.isFragile = true; body.fragileInsured = f.fragileInsured; }
+    // قطع الأوردر — لو اتضافت، التحصيل بيتحسب منها في السيرفر
+    const validItems = items
+      .filter((it) => it.nameAr.trim() && /^\d+(\.\d{1,2})?$/.test(it.price))
+      .map((it) => ({ nameAr: it.nameAr.trim(), price: it.price, qty: Number(it.qty) || 1 }));
+    if (validItems.length > 0) body.items = validItems;
     const r = await apiCall<{ awb: string; price: string; totalFees: string }>(
       "POST",
       "/api/v1/shipments",
@@ -253,6 +259,42 @@ export function CreateShipmentModal({
             <option value="prepaid">مدفوع مقدمًا</option>
           </select>
         </div>
+      </div>
+
+      {/* قطع الأوردر — للتسليم الجزئي بالقطعة */}
+      <div style={{ padding: "0.8rem", background: "var(--bg-soft)", borderRadius: 12, marginBottom: "0.8rem" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: items.length ? 8 : 0 }}>
+          <b style={{ fontSize: "0.85rem" }}>🧩 تقسيم الأوردر قطع</b>
+          <span style={{ fontSize: "0.72rem", color: "var(--muted)", marginInlineEnd: "auto" }}>
+            (عشان العميل يقدر يستلم بعضه — التحصيل بيتحسب من القطع)
+          </span>
+          <button type="button" className="btn btn-ghost" style={{ fontSize: "0.8rem", padding: "0.2rem 0.6rem" }}
+            onClick={() => setItems((p) => [...p, { nameAr: "", price: "", qty: "1" }])}>
+            + قطعة
+          </button>
+        </div>
+        {items.map((it, idx) => (
+          <div key={idx} style={{ display: "flex", gap: 6, marginBottom: 6 }}>
+            <input className="input" placeholder="اسم القطعة (بنطلون...)" value={it.nameAr}
+              onChange={(e) => setItems((p) => p.map((x, i) => i === idx ? { ...x, nameAr: e.target.value } : x))}
+              style={{ flex: 1 }} />
+            <input className="input" placeholder="السعر" value={it.price} inputMode="decimal" dir="ltr"
+              onChange={(e) => setItems((p) => p.map((x, i) => i === idx ? { ...x, price: e.target.value } : x))}
+              style={{ width: 80, textAlign: "right" }} />
+            <input className="input" placeholder="عدد" value={it.qty} inputMode="numeric" dir="ltr"
+              onChange={(e) => setItems((p) => p.map((x, i) => i === idx ? { ...x, qty: e.target.value } : x))}
+              style={{ width: 55, textAlign: "right" }} />
+            <button type="button" className="btn btn-ghost" style={{ padding: "0 0.5rem", color: "var(--color-danger)" }}
+              onClick={() => setItems((p) => p.filter((_, i) => i !== idx))}>✕</button>
+          </div>
+        ))}
+        {items.length > 0 && (
+          <div style={{ fontSize: "0.8rem", color: "var(--color-orange-600)", fontWeight: 700, marginTop: 4 }}>
+            إجمالي التحصيل من القطع:{" "}
+            {(items.reduce((s, it) => s + (parseFloat(it.price) || 0) * (Number(it.qty) || 1), 0)).toFixed(2)} ج
+            <span style={{ color: "var(--muted)", fontWeight: 400 }}> — بيتجاهل مبلغ التحصيل فوق</span>
+          </div>
+        )}
       </div>
 
       <button type="button" onClick={() => setShowMore((s) => !s)} className="btn btn-ghost" style={{ width: "100%", marginBottom: "0.8rem", fontSize: "0.85rem", justifyContent: "center" }}>

@@ -26,7 +26,9 @@ import { SHIPMENT_STATUSES } from "@/server/domain/statusMachine";
 import { applyTransition, type TransitionInput } from "@/server/services/transition";
 import type { Role } from "@/server/domain/statusMachine";
 import { buildTransitionFinancialEntry } from "@/server/services/shipmentFinancials";
+import { applyItemDecision } from "@/server/services/shipmentItems";
 import { openClaim } from "@/server/services/claim";
+import { HttpError } from "@/server/http/respond";
 import { enterReturns } from "@/server/services/returns";
 import { recordAttachment } from "@/server/services/attachment";
 import { fireWebhooks } from "@/server/services/apiAccess";
@@ -87,6 +89,10 @@ const bodySchema = z.object({
     .object({ collected: moneyString, method: z.string().min(1).max(30) })
     .optional(),
 
+  // التسليم الجزئي بالقطعة — معرّفات القطع اللي اتسلّمت (الباقي مرتجع).
+  // لو اتبعتت، التحصيل بيتحسب من القطع (بيتجاهل cod.collected).
+  deliveredItemIds: z.array(z.string().uuid()).optional(),
+
   // التشغيل
   courierId: z.string().uuid().nullable().optional(),
   runSheetId: z.string().uuid().nullable().optional(),
@@ -125,12 +131,26 @@ export async function POST(
       : undefined;
 
     const result = await db.transaction(async (tx) => {
+      // ═══ التسليم الجزئي بالقطعة ═══
+      // لو المندوب بعت قرار القطع، بنعلّمها ونحسب التحصيل منها،
+      // والحالة النهائية: كله اتسلّم → delivered · بعضه → partially_delivered.
+      let finalTo = b.to;
+      let finalCod = cod;
+      if (b.deliveredItemIds && (b.to === "delivered" || b.to === "partially_delivered")) {
+        const dec = await applyItemDecision(tx, shipmentId, b.deliveredItemIds);
+        if (dec.deliveredCount === 0) {
+          throw new HttpError(422, "NOTHING_DELIVERED", "مفيش قطع اتسلّمت — استخدم مرتجع أو تعذّر");
+        }
+        finalTo = dec.returnedCount === 0 ? "delivered" : "partially_delivered";
+        finalCod = { collectedP: dec.collectedP, method: cod?.method ?? "cash" };
+      }
+
       // البوابة الوحيدة — بتنده بنّاء القيد المالي **بعد** ما
       // تتأكد إن التحول مسموح، عشان الممنوع يرجّع NOT_ALLOWED
       // مش خطأ بناء قيد.
       const res = await applyTransition(tx, {
         shipmentId,
-        to: b.to as TransitionInput["to"],
+        to: finalTo as TransitionInput["to"],
         actor: { userId: ctx.user.userId, role, name: ctx.user.fullName },
         expectedStatus: b.expectedStatus as TransitionInput["expectedStatus"],
         expectedVersion: b.expectedVersion,
@@ -147,15 +167,15 @@ export async function POST(
         photoUrl: b.photoUrl,
         signatureUrl: b.signatureUrl,
         opsPreauthByUserId: b.opsPreauthByUserId,
-        cod,
+        cod: finalCod,
         courierId: b.courierId,
         runSheetId: b.runSheetId,
         pickupId: b.pickupId,
         buildFinancialEntry: (exec) =>
           buildTransitionFinancialEntry(exec, {
             shipmentId,
-            to: b.to as TransitionInput["to"],
-            cod,
+            to: finalTo as TransitionInput["to"],
+            cod: finalCod,
           }),
         ip: ctx.ip,
         userAgent: ctx.userAgent,
@@ -193,17 +213,18 @@ export async function POST(
     });
 
     // إشعار ويب-هوك التاجر (best-effort، مش بيعطّل الرد ولا الترانزاكشن)
+    const appliedTo = result.res.toStatus;
     const NOTIFY = new Set(["picked_up", "out_for_delivery", "delivered", "partially_delivered", "delivery_failed", "returned_to_merchant"]);
-    if (!result.res.idempotentReplay && NOTIFY.has(b.to)) {
+    if (!result.res.idempotentReplay && NOTIFY.has(appliedTo)) {
       void (async () => {
         try {
           const m = await db.execute(sql`SELECT merchant_id::text AS mid FROM shipments WHERE id = ${shipmentId}::uuid`);
           const mid = (Array.isArray(m) ? m : (m as { rows: { mid: string }[] }).rows)[0]?.mid as string | undefined;
-          if (mid) await fireWebhooks(db, { merchantId: mid, event: String(b.to), payload: { awb: result.res.awb, status: b.to, shipmentId } });
+          if (mid) await fireWebhooks(db, { merchantId: mid, event: String(appliedTo), payload: { awb: result.res.awb, status: appliedTo, shipmentId } });
         } catch { /* best-effort */ }
       })();
       // إشعار العميل (واتساب أو محاكاة) — نفس النمط best-effort
-      void (async () => { try { await notifyStatusChange(db, { shipmentId, event: String(b.to) }); } catch { /* best-effort */ } })();
+      void (async () => { try { await notifyStatusChange(db, { shipmentId, event: String(appliedTo) }); } catch { /* best-effort */ } })();
     }
 
     return ok(

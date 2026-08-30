@@ -69,6 +69,9 @@ export interface CreateShipmentInput {
   /** سحب من مخزون التاجر (فُلفيلمنت) — بيخصم الكمية */
   productId?: string | null;
   productQty?: number;
+  /** قطع الأوردر — للتسليم الجزئي بالقطعة. لو اتبعتت، التحصيل =
+   *  مجموع أسعارها (بيتجاهل codAmount). كل price بالجنيه. */
+  items?: { nameAr: string; sku?: string | null; qty?: number; price: string }[];
   /** لو true بيتأكد فورًا (draft → awaiting_pickup) */
   confirm?: boolean;
 }
@@ -139,7 +142,12 @@ export async function createShipment(
   }
 
   // ═══ ٤) التحصيل ═══
-  const codAmountP = input.codAmount ? poundsToPiastres(input.codAmount) : 0n;
+  // لو الأوردر متقسّم قطع، التحصيل = مجموع أسعارها (بيتجاهل codAmount).
+  const items = input.items ?? [];
+  let codAmountP = input.codAmount ? poundsToPiastres(input.codAmount) : 0n;
+  if (items.length > 0) {
+    codAmountP = items.reduce((s, it) => s + poundsToPiastres(it.price) * BigInt(it.qty ?? 1), 0n);
+  }
   const paymentMethod = input.paymentMethod ?? "cash";
   const codEnabled = gov.cod_enabled && merchant.cod_enabled;
   if (codAmountP > 0n && paymentMethod !== "prepaid" && !codEnabled) {
@@ -264,6 +272,15 @@ export async function createShipment(
         ${line.unitValueP.toString()}::bigint, ${line.amountP.toString()}::bigint,
         ${isEstimate}, ${line.isAuto}
       )
+    `);
+  }
+
+  // ═══ ٨.٠) قطع الأوردر (للتسليم الجزئي بالقطعة) ═══
+  for (const it of items) {
+    await ex.execute(sql`
+      INSERT INTO shipment_items (shipment_id, name_ar, sku, qty, unit_price_p)
+      VALUES (${shipmentId}::uuid, ${it.nameAr}, ${it.sku ?? null}, ${it.qty ?? 1},
+              ${poundsToPiastres(it.price).toString()}::bigint)
     `);
   }
 

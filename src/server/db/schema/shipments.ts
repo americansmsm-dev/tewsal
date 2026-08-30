@@ -377,3 +377,32 @@ export const scanEvents = pgTable(
     index("scan_events_rejected_idx").on(t.wasRejected, t.scannedAt),
   ]
 );
+
+// ---------------------------------------------------------------
+// قطع الأوردر — للتسليم/الاستلام الجزئي بالقطعة
+// ---------------------------------------------------------------
+
+/**
+ * قطع الأوردر (بنطلون، تيشيرت، كاب...) بسعر لكل قطعة.
+ * العميل يقدر يستلم بعضها ويرجّع الباقي — المندوب بيعلّم كل قطعة.
+ * التحصيل الفعلي = مجموع أسعار القطع المتسلّمة.
+ */
+export const shipmentItems = pgTable(
+  "shipment_items",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    shipmentId: uuid("shipment_id").notNull().references(() => shipments.id, { onDelete: "cascade" }),
+    nameAr: text("name_ar").notNull(),
+    sku: text("sku"),
+    qty: integer("qty").notNull().default(1),
+    /** سعر القطعة (جزء من التحصيل) بالقروش */
+    unitPriceP: bigint("unit_price_p", { mode: "bigint" }).notNull().default(sql`0`),
+    /** pending · delivered · returned */
+    status: text("status").notNull().default("pending"),
+    decidedAt: timestamp("decided_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("shipment_items_shipment_idx").on(t.shipmentId),
+  ]
+);
