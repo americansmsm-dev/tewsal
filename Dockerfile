@@ -47,6 +47,8 @@ COPY --from=builder --chown=tewsal:nodejs /app/src/server/db/migrations ./src/se
 COPY --from=builder --chown=tewsal:nodejs /app/scripts ./scripts
 COPY --from=builder --chown=tewsal:nodejs /app/src ./src
 COPY --from=builder --chown=tewsal:nodejs /app/package.json ./package.json
+# tsconfig.json لازم عشان tsx يحلّ اختصار "@/*" في السكربتات اللي بتستورد خدمات
+COPY --from=builder --chown=tewsal:nodejs /app/tsconfig.json ./tsconfig.json
 
 # entrypoint: migrate + seed (idempotent) ثم تشغيل السيرفر
 COPY --chown=tewsal:nodejs docker-entrypoint.sh ./docker-entrypoint.sh
