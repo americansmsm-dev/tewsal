@@ -136,6 +136,8 @@ export async function POST(
       // والحالة النهائية: كله اتسلّم → delivered · بعضه → partially_delivered.
       let finalTo = b.to;
       let finalCod = cod;
+      let finalNote = b.note;
+      let finalOpsPreauth = b.opsPreauthByUserId;
       if (b.deliveredItemIds && (b.to === "delivered" || b.to === "partially_delivered")) {
         const dec = await applyItemDecision(tx, shipmentId, b.deliveredItemIds);
         if (dec.deliveredCount === 0) {
@@ -143,6 +145,12 @@ export async function POST(
         }
         finalTo = dec.returnedCount === 0 ? "delivered" : "partially_delivered";
         finalCod = { collectedP: dec.collectedP, method: cod?.method ?? "cash" };
+        // الجزئي بالقطعة: المبلغ محدّد من أسعار القطع الثابتة والقطع المرتجعة
+        // دليل مادي، فمفيش حاجة لموافقة عمليات مسبقة يدوية (قرار المالك).
+        if (finalTo === "partially_delivered") {
+          finalOpsPreauth = finalOpsPreauth ?? ctx.user.userId;
+          finalNote = finalNote ?? `تسليم جزئي بالقطعة — سلّم ${dec.deliveredCount} · رجّع ${dec.returnedCount}`;
+        }
       }
 
       // البوابة الوحيدة — بتنده بنّاء القيد المالي **بعد** ما
@@ -162,11 +170,11 @@ export async function POST(
         lat: b.lat,
         lng: b.lng,
         reasonCode: b.reasonCode,
-        note: b.note,
+        note: finalNote,
         receiverName: b.receiverName,
         photoUrl: b.photoUrl,
         signatureUrl: b.signatureUrl,
-        opsPreauthByUserId: b.opsPreauthByUserId,
+        opsPreauthByUserId: finalOpsPreauth,
         cod: finalCod,
         courierId: b.courierId,
         runSheetId: b.runSheetId,
