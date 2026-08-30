@@ -12,6 +12,7 @@ import { CreateShipmentModal } from "../components/CreateShipmentModal";
 import { WalletPanel } from "../components/WalletPanel";
 import { InstallPrompt } from "../components/InstallPrompt";
 import { OrderDetailModal, LabelModal } from "../components/OrderModals";
+import { ProfileCard } from "../components/ProfileCard";
 import { apiCall, STATUS_LABELS_AR, statusTone, toneStyle, toArabicDigits, type ShipmentStatus } from "../lib/client";
 
 interface Me { id: string; name: string; role: string; merchantId: string | null; }
@@ -365,15 +366,6 @@ function ProfileTab({ me, rows, onDone, logout }: { me: Me; rows: ShipmentRow[];
   return (
     <div style={{ display: "grid", gap: 14 }}>
       <h2 style={{ margin: 0, fontSize: "1.05rem" }}>بياناتي</h2>
-      <div className="card" style={{ padding: "1.2rem", display: "flex", alignItems: "center", gap: 14 }}>
-        <div style={{ width: 54, height: 54, borderRadius: 14, background: "var(--color-orange-500)", color: "#fff", display: "grid", placeItems: "center", fontSize: "1.4rem", fontWeight: 800 }}>
-          {me.name.trim().charAt(0)}
-        </div>
-        <div>
-          <div style={{ fontSize: "1.1rem", fontWeight: 800 }}>{me.name}</div>
-          <div style={{ fontSize: "0.82rem", color: "var(--muted)" }}>حساب تاجر</div>
-        </div>
-      </div>
 
       {/* طلب استلام */}
       <div className="card" style={{ padding: "1rem 1.2rem" }}>
@@ -395,7 +387,7 @@ function ProfileTab({ me, rows, onDone, logout }: { me: Me; rows: ShipmentRow[];
         {msg && <div style={{ marginTop: 8, fontSize: "0.82rem", fontWeight: 700, color: msg.kind === "ok" ? "var(--color-success)" : "var(--color-danger)" }}>{msg.text}</div>}
       </div>
 
-      <button className="btn btn-ghost" style={{ padding: "0.85rem", color: "var(--color-danger)", borderColor: "var(--color-danger)" }} onClick={logout}>تسجيل الخروج</button>
+      <ProfileCard subtitle="حساب تاجر" logout={logout} />
     </div>
   );
 }

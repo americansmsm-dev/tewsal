@@ -69,6 +69,9 @@ export const users = pgTable(
     username: text("username").notNull(),
     phone: text("phone"),
     email: text("email"),
+    /** بروفايل: صورة (R2) وعنوان */
+    avatarUrl: text("avatar_url"),
+    address: text("address"),
     /** argon2id — مفيش أي مكان تاني بيعمل hash */
     passwordHash: text("password_hash").notNull(),
     role: text("role").notNull(),

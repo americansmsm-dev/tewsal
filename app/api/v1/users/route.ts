@@ -28,6 +28,8 @@ const createSchema = z.object({
   username: z.string().min(3).max(40).regex(/^[a-zA-Z0-9_.]+$/, "الحروف الإنجليزية والأرقام و _ . فقط"),
   phone: z.string().max(30).optional(),
   role: z.enum(CREATABLE_ROLES as unknown as [string, ...string[]]),
+  /** المدير يقدر يحدّد الباسورد بنفسه — وإلا بيتولّد مؤقت */
+  password: z.string().min(6).max(72).optional(),
 });
 
 /** باسورد مؤقت قوي وسهل القراءة */
@@ -49,13 +51,15 @@ export async function POST(req: NextRequest) {
     const phone = u.phone ? normalizeEgyptMobile(u.phone) : null;
     if (u.phone && !phone) return fail("BAD_PHONE", "رقم التليفون غير صالح", 400);
 
-    const password = tempPassword();
+    // لو المدير حدّد الباسورد، بنستخدمه (وميضطرش يغيّره)؛ وإلا مؤقت
+    const custom = !!u.password;
+    const password = u.password ?? tempPassword();
     const passwordHash = await hashPassword(password);
 
     try {
       const rows = await db.execute(sql`
         INSERT INTO users (full_name, username, phone, password_hash, role, must_change_password)
-        VALUES (${u.fullName}, ${u.username}, ${phone}, ${passwordHash}, ${u.role}, true)
+        VALUES (${u.fullName}, ${u.username}, ${phone}, ${passwordHash}, ${u.role}, ${!custom})
         RETURNING id, full_name, username, role
       `);
       const created = (Array.isArray(rows) ? rows : (rows as { rows: unknown[] }).rows)[0] as {

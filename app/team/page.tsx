@@ -35,6 +35,8 @@ export default function TeamPage() {
   const [users, setUsers] = useState<TeamUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
+  const [resetUser, setResetUser] = useState<TeamUser | null>(null);
+  const canManage = user?.role === "super_admin" || user?.role === "branch_manager";
 
   const load = useCallback(async () => {
     const r = await apiCall<{ users: TeamUser[] }>("GET", "/api/v1/users");
@@ -69,18 +71,19 @@ export default function TeamPage() {
                 <Th>الدور</Th>
                 <Th>التليفون</Th>
                 <Th>الحالة</Th>
+                {canManage && <Th>الباسورد</Th>}
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={5} style={{ padding: "2rem", textAlign: "center", color: "var(--muted)" }}>
+                  <td colSpan={canManage ? 6 : 5} style={{ padding: "2rem", textAlign: "center", color: "var(--muted)" }}>
                     جاري التحميل...
                   </td>
                 </tr>
               ) : users.length === 0 ? (
                 <tr>
-                  <td colSpan={5} style={{ padding: "2.5rem", textAlign: "center", color: "var(--muted)" }}>
+                  <td colSpan={canManage ? 6 : 5} style={{ padding: "2.5rem", textAlign: "center", color: "var(--muted)" }}>
                     مفيش أعضاء لسه — أضف أول موظف أو مندوب
                   </td>
                 </tr>
@@ -112,6 +115,13 @@ export default function TeamPage() {
                         {u.is_active ? "● نشط" : "متوقف"}
                       </span>
                     </Td>
+                    {canManage && (
+                      <Td>
+                        {u.role !== "super_admin" && (
+                          <button className="btn btn-ghost" style={{ padding: "0.25rem 0.6rem", fontSize: "0.78rem" }} onClick={() => setResetUser(u)}>🔑 غيّر الباسورد</button>
+                        )}
+                      </Td>
+                    )}
                   </tr>
                 ))
               )}
@@ -129,21 +139,68 @@ export default function TeamPage() {
           }}
         />
       )}
+      {resetUser && (
+        <ResetPasswordModal user={resetUser} onClose={() => setResetUser(null)} onDone={() => setResetUser(null)} />
+      )}
     </div>
   );
 }
 
+function ResetPasswordModal({ user, onClose, onDone }: { user: TeamUser; onClose: () => void; onDone: () => void }) {
+  const [pw, setPw] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState(false);
+
+  async function submit() {
+    if (pw.length < 6) { setError("الباسورد لازم ٦ حروف على الأقل"); return; }
+    setBusy(true); setError(null);
+    const r = await apiCall("POST", `/api/v1/users/${user.id}/password`, { password: pw });
+    setBusy(false);
+    if (r.ok) setDone(true); else setError(r.error?.message ?? "فشل تغيير الباسورد");
+  }
+
+  return (
+    <Overlay onClose={onClose}>
+      {done ? (
+        <div style={{ textAlign: "center" }}>
+          <div style={{ fontSize: "2rem" }}>✅</div>
+          <h3 style={{ margin: "0.3rem 0" }}>اتغيّر الباسورد</h3>
+          <p style={{ color: "var(--muted)", fontSize: "0.85rem" }}>الباسورد الجديد لـ {user.full_name}:</p>
+          <div style={{ background: "var(--bg-soft)", borderRadius: 12, padding: "0.8rem", margin: "0.5rem 0 1rem" }}>
+            <span dir="ltr" style={{ fontWeight: 800, fontFamily: "monospace", fontSize: "1.05rem", color: "var(--color-orange-600)" }}>{pw}</span>
+          </div>
+          <button className="btn btn-primary" style={{ width: "100%" }} onClick={onDone}>تمام</button>
+        </div>
+      ) : (
+        <>
+          <h3 style={{ marginTop: 0, marginBottom: "0.4rem" }}>تغيير باسورد {user.full_name}</h3>
+          <p style={{ color: "var(--muted)", fontSize: "0.82rem", marginTop: 0 }}>اسم المستخدم: <span dir="ltr">{user.username}</span></p>
+          <label className="label">الباسورد الجديد</label>
+          <input className="input" value={pw} onChange={(e) => setPw(e.target.value)} dir="ltr" style={{ textAlign: "right", marginBottom: "1rem" }} placeholder="٦ حروف على الأقل" />
+          {error && <ErrorBox msg={error} />}
+          <div style={{ display: "flex", gap: 8 }}>
+            <button className="btn btn-primary" style={{ flex: 1 }} disabled={busy || pw.length < 6} onClick={submit}>{busy ? "جاري..." : "غيّر الباسورد"}</button>
+            <button className="btn btn-ghost" onClick={onClose}>إلغاء</button>
+          </div>
+        </>
+      )}
+    </Overlay>
+  );
+}
+
 function CreateUserModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
-  const [f, setF] = useState({ fullName: "", username: "", phone: "", role: "courier" });
+  const [f, setF] = useState({ fullName: "", username: "", phone: "", role: "courier", password: "" });
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [created, setCreated] = useState<{ name: string; username: string; tempPassword: string } | null>(null);
+  const [created, setCreated] = useState<{ name: string; username: string; tempPassword: string; custom: boolean } | null>(null);
 
   async function submit() {
     setError(null);
     setBusy(true);
     const body: Record<string, unknown> = { fullName: f.fullName, username: f.username, role: f.role };
     if (f.phone) body.phone = f.phone;
+    if (f.password) body.password = f.password;
     const r = await apiCall<{ user: { full_name: string; username: string }; tempPassword: string }>(
       "POST",
       "/api/v1/users",
@@ -151,7 +208,7 @@ function CreateUserModal({ onClose, onDone }: { onClose: () => void; onDone: () 
     );
     setBusy(false);
     if (r.ok && r.data) {
-      setCreated({ name: r.data.user.full_name, username: r.data.user.username, tempPassword: r.data.tempPassword });
+      setCreated({ name: r.data.user.full_name, username: r.data.user.username, tempPassword: r.data.tempPassword, custom: !!f.password });
     } else {
       setError(r.error?.message ?? "فشل إنشاء الحساب");
     }
@@ -164,7 +221,7 @@ function CreateUserModal({ onClose, onDone }: { onClose: () => void; onDone: () 
           <div style={{ fontSize: "2.2rem" }}>✅</div>
           <h3 style={{ margin: "0.4rem 0" }}>اتفتح الحساب</h3>
           <p style={{ color: "var(--muted)", fontSize: "0.85rem", margin: "0 0 1rem" }}>
-            {created.name} — سلّمه البيانات دي، والباسورد بيتغيّر أول دخول
+            {created.name} — سلّمه البيانات دي{created.custom ? "" : "، والباسورد بيتغيّر أول دخول"}
           </p>
           <div
             style={{
@@ -177,7 +234,7 @@ function CreateUserModal({ onClose, onDone }: { onClose: () => void; onDone: () 
             }}
           >
             <Row label="اسم المستخدم" value={created.username} />
-            <Row label="الباسورد المؤقت" value={created.tempPassword} highlight />
+            <Row label={created.custom ? "الباسورد" : "الباسورد المؤقت"} value={created.tempPassword} highlight />
           </div>
           <button className="btn btn-primary" style={{ width: "100%" }} onClick={onDone}>
             تمام
@@ -217,13 +274,15 @@ function CreateUserModal({ onClose, onDone }: { onClose: () => void; onDone: () 
         </div>
       </div>
       <label className="label">الدور</label>
-      <select className="input" value={f.role} onChange={(e) => setF({ ...f, role: e.target.value })} style={{ marginBottom: "1rem" }}>
+      <select className="input" value={f.role} onChange={(e) => setF({ ...f, role: e.target.value })} style={{ marginBottom: "0.8rem" }}>
         {ROLE_OPTIONS.map((o) => (
           <option key={o.value} value={o.value}>
             {o.label}
           </option>
         ))}
       </select>
+      <label className="label">الباسورد (سيبه فاضي لباسورد تلقائي)</label>
+      <input className="input" value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} dir="ltr" style={{ textAlign: "right", marginBottom: "1rem" }} placeholder="٦ حروف على الأقل — أو سيبه فاضي" />
       {error && <ErrorBox msg={error} />}
       <div style={{ display: "flex", gap: 8 }}>
         <button

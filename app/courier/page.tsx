@@ -10,6 +10,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { TransitionModal } from "../components/TransitionModal";
 import { OrderDetailModal, LabelModal } from "../components/OrderModals";
+import { ProfileCard } from "../components/ProfileCard";
 import { InstallPrompt } from "../components/InstallPrompt";
 import { apiCall, toArabicDigits, type ShipmentStatus, type Role } from "../lib/client";
 import { outboxCount, flushOutbox } from "../lib/outbox";
@@ -123,7 +124,7 @@ export default function CourierApp() {
         {tab === "tasks" && <TasksTab tasks={tasks} loading={loading} onPick={setActive} onDetail={setDetailTask} />}
         {tab === "custody" && <CustodyTab sum={sum} />}
         {tab === "earnings" && <EarningsTab sum={sum} />}
-        {tab === "profile" && <ProfileTab me={me} att={att} logout={logout} />}
+        {tab === "profile" && <ProfileTab att={att} logout={logout} />}
       </main>
 
       {/* الشريط السفلي */}
@@ -315,24 +316,15 @@ function EarningsTab({ sum }: { sum: Summary | null }) {
 }
 
 // ─────────────────────────── بياناتي ───────────────────────────
-function ProfileTab({ me, att, logout }: { me: Me; att: { checkedIn: boolean; checkedOut: boolean } | null; logout: () => void }) {
+function ProfileTab({ att, logout }: { att: { checkedIn: boolean; checkedOut: boolean } | null; logout: () => void }) {
   return (
     <div style={{ display: "grid", gap: 14 }}>
       <h2 style={{ margin: 0, fontSize: "1.05rem" }}>بياناتي</h2>
-      <div className="card" style={{ padding: "1.2rem", display: "flex", alignItems: "center", gap: 14 }}>
-        <div style={{ width: 54, height: 54, borderRadius: "50%", background: "var(--color-orange-500)", color: "#fff", display: "grid", placeItems: "center", fontSize: "1.4rem", fontWeight: 800 }}>
-          {me.name.trim().charAt(0)}
-        </div>
-        <div>
-          <div style={{ fontSize: "1.1rem", fontWeight: 800 }}>{me.name}</div>
-          <div style={{ fontSize: "0.82rem", color: "var(--muted)" }}>مندوب توصيل</div>
-        </div>
-      </div>
       <div className="card" style={{ padding: "1rem 1.2rem", display: "flex", justifyContent: "space-between" }}>
         <span style={{ color: "var(--muted)" }}>حالة اليوم</span>
         <b>{att?.checkedOut ? "انصرفت" : att?.checkedIn ? "حاضر ●" : "لسه ماسجّلتش حضور"}</b>
       </div>
-      <button className="btn btn-ghost" style={{ padding: "0.85rem", color: "var(--color-danger)", borderColor: "var(--color-danger)" }} onClick={logout}>تسجيل الخروج</button>
+      <ProfileCard subtitle="مندوب توصيل" logout={logout} />
     </div>
   );
 }

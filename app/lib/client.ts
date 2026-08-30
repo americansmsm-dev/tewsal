@@ -84,6 +84,16 @@ export async function uploadProof(
   return json.key as string;
 }
 
+/** رفع صورة البروفايل — بيرجّع رابط عرض مؤقت */
+export async function uploadAvatar(file: File): Promise<string | null> {
+  const res = await fetch("/api/v1/profile/avatar", {
+    method: "POST", headers: { "content-type": file.type }, body: file, credentials: "same-origin",
+  });
+  const json = await res.json().catch(() => null);
+  if (!res.ok) throw new Error((json as { error?: { message?: string } })?.error?.message ?? "فشل رفع الصورة");
+  return (json?.data?.viewUrl ?? json?.viewUrl ?? null) as string | null;
+}
+
 // ---------------------------------------------------------------
 // ألوان الحالات — للـ badge
 // ---------------------------------------------------------------
