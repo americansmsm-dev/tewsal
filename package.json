@@ -19,6 +19,7 @@
     "invariants": "tsx scripts/invariants.ts",
     "daily-report": "tsx scripts/daily-report.ts",
     "backup": "tsx scripts/backup.ts",
+    "shadow": "tsx scripts/shadow-settlement.ts",
     "verify:ledger": "tsx scripts/verify-ledger.ts",
     "verify:transition": "tsx scripts/verify-transition.ts",
     "verify:api": "tsx scripts/verify-api.ts",

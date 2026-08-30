@@ -14,13 +14,15 @@
  * ============================================================
  */
 import { spawnSync } from "node:child_process";
-import { mkdirSync, statSync, readdirSync, unlinkSync } from "node:fs";
-import { join } from "node:path";
+import { mkdirSync, statSync, readdirSync, unlinkSync, readFileSync } from "node:fs";
+import { basename, join } from "node:path";
+import { isR2Configured, putObject } from "../src/lib/r2";
 
 const URL = process.env.DATABASE_URL ?? "postgres://postgres@127.0.0.1:55432/tewsal";
 const DIR = process.env.BACKUP_DIR ?? join(process.cwd(), "backups");
 const RETAIN = Number(process.env.BACKUP_RETAIN ?? 14); // آخر ١٤ نسخة
 const verify = process.argv.includes("--verify");
+const upload = process.argv.includes("--upload"); // نسخة خارجية على R2
 
 function ts(): string {
   return new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
@@ -48,6 +50,17 @@ function backup() {
   return out;
 }
 
+async function uploadToR2(dump: string) {
+  if (!isR2Configured()) {
+    console.log("⚠️ R2 مش متضبط — تخطّيت الرفع الخارجي (محتاج R2_ACCOUNT_ID/ACCESS_KEY_ID/SECRET_ACCESS_KEY/BUCKET)");
+    return;
+  }
+  const key = `db-backups/${basename(dump)}`;
+  console.log(`⏳ بيرفع النسخة الخارجية → R2:${key}`);
+  await putObject(key, readFileSync(dump), "application/octet-stream");
+  console.log(`✅ اترفعت نسخة خارجية على R2 (${key})`);
+}
+
 function verifyRestore(dump: string) {
   const tmpDb = `tewsal_restore_${Date.now()}`;
   const admin = URL.replace(/\/[^/]+$/, "/postgres"); // نتصل بـ postgres عشان ننشئ قاعدة
@@ -72,11 +85,14 @@ function verifyRestore(dump: string) {
   }
 }
 
-try {
+async function run_all() {
   const dump = backup();
   if (verify) verifyRestore(dump);
   else console.log("ℹ️ للتأكد إنها قابلة للاسترجاع: أعد التشغيل بـ --verify");
-} catch (err) {
+  if (upload) await uploadToR2(dump);
+  else console.log("ℹ️ لنسخة خارجية على R2: أعد التشغيل بـ --upload");
+}
+run_all().catch((err) => {
   console.error("❌ فشل:", err instanceof Error ? err.message : err);
   process.exitCode = 1;
-}
+});
