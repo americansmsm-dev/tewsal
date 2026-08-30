@@ -47,6 +47,7 @@ const OWNER_TYPE_OF: Record<string, "courier" | "merchant" | "branch" | "company
   COURIER_RECEIVABLE: "courier",
   COURIER_COMMISSION_PAYABLE: "courier",
   MERCHANT_PAYABLE: "merchant",
+  MERCHANT_WALLET: "merchant",
   BRANCH_CASH: "branch",
 };
 
@@ -56,6 +57,7 @@ const OWNED_ACCOUNT_NAME: Record<string, string> = {
   COURIER_RECEIVABLE: "ذمم على المندوب",
   COURIER_COMMISSION_PAYABLE: "عمولات مستحقة للمندوب",
   MERCHANT_PAYABLE: "مستحقات التاجر",
+  MERCHANT_WALLET: "محفظة التاجر",
   BRANCH_CASH: "خزنة الفرع",
 };
 
@@ -66,6 +68,7 @@ const ACCOUNT_TYPE_OF: Record<string, string> = {
   COMPANY_BANK: "asset",
   COURIER_COMMISSION_PAYABLE: "liability",
   MERCHANT_PAYABLE: "liability",
+  MERCHANT_WALLET: "liability",
 };
 
 /**

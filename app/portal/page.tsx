@@ -9,6 +9,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { CreateShipmentModal } from "../components/CreateShipmentModal";
+import { WalletPanel } from "../components/WalletPanel";
 import { apiCall, STATUS_LABELS_AR, statusTone, toneStyle, toArabicDigits, type ShipmentStatus } from "../lib/client";
 
 interface Me {
@@ -99,6 +100,9 @@ export default function PortalPage() {
             <div style={{ fontSize: "0.72rem", color: "var(--muted)", marginTop: 4 }}>تم التسليم بس الكاش لسه مع المندوب</div>
           </div>
         </div>
+
+        {/* المحفظة — عرض فقط للتاجر (بيشوف رصيده عشان يشحن الأوردرات من غير تحصيل) */}
+        {me.merchantId && <WalletPanel merchantId={me.merchantId} canDeposit={false} />}
 
         <div style={{ display: "flex", alignItems: "center", marginBottom: "1rem", gap: 10 }}>
           <h2 style={{ margin: 0, fontSize: "1.1rem", marginInlineEnd: "auto" }}>شحناتي</h2>

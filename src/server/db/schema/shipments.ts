@@ -114,6 +114,9 @@ export const shipments = pgTable(
     codAmountP: bigint("cod_amount_p", { mode: "bigint" }).notNull().default(sql`0`),
     paymentMethod: text("payment_method").notNull().default("cash"),
     shippingPayer: text("shipping_payer").notNull().default("merchant"),
+    /** أوردر محفظة: تحصيل صفر + الشحن على التاجر → شحنه بيتخصم من محفظته
+     *  والشحنة محجوز شحنها وقت الإنشاء (ماتتعملش لو الرصيد مايكفّيش) */
+    isWalletOrder: boolean("is_wallet_order").notNull().default(false),
     /** القيمة المعلنة — بتتسجّل عند الإنشاء عشان متتضخّمش بعد الفقد */
     declaredValueP: bigint("declared_value_p", { mode: "bigint" }).notNull().default(sql`0`),
 

@@ -12,6 +12,7 @@ import { AppNav } from "../../components/AppNav";
 import { useCurrentUser } from "../../lib/useCurrentUser";
 import { apiCall } from "../../lib/client";
 import { MerchantCrmPanel } from "../../components/MerchantCrmPanel";
+import { WalletPanel } from "../../components/WalletPanel";
 import { STATUS_LABELS_AR } from "@/server/domain/statusMachine";
 
 interface Line {
@@ -102,6 +103,9 @@ export default function MerchantStatementPage() {
             tone="warn"
           />
         </div>
+
+        {/* محفظة التاجر — الرصيد + الشحن */}
+        <WalletPanel merchantId={merchantId} canDeposit={canSettle} />
 
         {canSettle && (
           <div style={{ marginBottom: "1rem" }}>

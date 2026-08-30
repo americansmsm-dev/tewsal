@@ -30,6 +30,8 @@ export const ACC = {
   courierCommissionPayable: (courierId: string): AccountRef => ({ code: "COURIER_COMMISSION_PAYABLE", ownerId: courierId }),
   branchCash: (branchId: string): AccountRef => ({ code: "BRANCH_CASH", ownerId: branchId }),
   merchantPayable: (merchantId: string): AccountRef => ({ code: "MERCHANT_PAYABLE", ownerId: merchantId }),
+  /** محفظة التاجر — رصيد مدفوع مقدمًا بيغطّي شحن الأوردرات اللي من غير تحصيل */
+  merchantWallet: (merchantId: string): AccountRef => ({ code: "MERCHANT_WALLET", ownerId: merchantId }),
   companyBank: (acct = "main"): AccountRef => ({ code: "COMPANY_BANK", ownerId: acct }),
   walletVodafone: (): AccountRef => ({ code: "EWALLET_VODAFONE", ownerId: null }),
   walletInstapay: (): AccountRef => ({ code: "EWALLET_INSTAPAY", ownerId: null }),
@@ -118,6 +120,9 @@ export interface DeliveryInput {
   codFeeP: Piastres;
   /** أي رسوم إضافية (قطع زائدة، وزن، تأمين...) */
   otherFeesP: Piastres;
+  /** الحساب اللي الرسوم تتخصم منه — افتراضي مستحقات التاجر.
+   *  في الأوردر الـwallet (تحصيل صفر) بيبقى محفظة التاجر. */
+  chargeAccount?: AccountRef;
 }
 
 /**
@@ -132,6 +137,7 @@ export interface DeliveryInput {
  */
 export function buildDeliveryEntry(i: DeliveryInput): DraftEntry {
   const totalFees = i.shippingP + i.codFeeP + i.otherFeesP;
+  const charge = i.chargeAccount ?? ACC.merchantPayable(i.merchantId);
   const lines: DraftLine[] = [];
 
   // التحصيل: بيدخل حساب حسب طريقة الدفع
@@ -154,10 +160,10 @@ export function buildDeliveryEntry(i: DeliveryInput): DraftEntry {
     });
   }
 
-  // الرسوم: بتتخصم من مستحقات التاجر وتتحول لإيراد
+  // الرسوم: بتتخصم من مستحقات التاجر (أو محفظته في الأوردر الـwallet) وتتحول لإيراد
   if (totalFees > 0n) {
     lines.push({
-      account: ACC.merchantPayable(i.merchantId),
+      account: charge,
       debitP: totalFees,
       creditP: 0n,
       memo: `رسوم ${i.awb}`,
@@ -212,13 +218,16 @@ export interface ReturnInput {
   awb: string;
   shippingP: Piastres;
   returnFeeP: Piastres;
+  /** الحساب اللي الرسوم تتخصم منه — افتراضي مستحقات التاجر (محفظته في الأوردر الـwallet) */
+  chargeAccount?: AccountRef;
 }
 
 export function buildReturnEntry(i: ReturnInput): DraftEntry {
   const total = i.shippingP + i.returnFeeP;
+  const charge = i.chargeAccount ?? ACC.merchantPayable(i.merchantId);
   const lines: DraftLine[] = [
     {
-      account: ACC.merchantPayable(i.merchantId),
+      account: charge,
       debitP: total,
       creditP: 0n,
       memo: `رسوم إرجاع ${i.awb}`,
@@ -266,6 +275,7 @@ export function buildCancellationEntry(i: {
   merchantId: string;
   awb: string;
   shippingP: Piastres;
+  chargeAccount?: AccountRef;
 }): DraftEntry {
   if (i.shippingP <= 0n) {
     throw new Error("إلغاء بشحن صفر مبيعملش قيد — الإلغاء قبل الاستلام مجاني");
@@ -277,7 +287,7 @@ export function buildCancellationEntry(i: {
     kind: "cancellation",
     lines: [
       {
-        account: ACC.merchantPayable(i.merchantId),
+        account: i.chargeAccount ?? ACC.merchantPayable(i.merchantId),
         debitP: i.shippingP,
         creditP: 0n,
         memo: `شحن مستحق على الإلغاء ${i.awb}`,
@@ -311,6 +321,7 @@ export function buildDisposalEntry(i: {
   merchantId: string;
   awb: string;
   shippingP: Piastres;
+  chargeAccount?: AccountRef;
 }): DraftEntry {
   if (i.shippingP <= 0n) {
     throw new Error("إتلاف بشحن صفر مبيعملش قيد");
@@ -322,7 +333,7 @@ export function buildDisposalEntry(i: {
     kind: "disposal",
     lines: [
       {
-        account: ACC.merchantPayable(i.merchantId),
+        account: i.chargeAccount ?? ACC.merchantPayable(i.merchantId),
         debitP: i.shippingP,
         creditP: 0n,
         memo: `شحن مستحق على الإتلاف ${i.awb}`,
@@ -472,6 +483,45 @@ export function buildBankDepositEntry(i: {
     lines: [
       { account: ACC.companyBank(i.bankAccount ?? "main"), debitP: i.amountP, creditP: 0n, memo: "إيداع" },
       { account: ACC.branchCash(i.branchId), debitP: 0n, creditP: i.amountP, memo: "خروج من الخزنة" },
+    ],
+  });
+}
+
+// ---------------------------------------------------------------
+// ٤.١) شحن محفظة التاجر (إيداع مقدم)
+// ---------------------------------------------------------------
+
+/**
+ * التاجر بيشحن محفظته فلوس عشان يغطّي شحن الأوردرات اللي من غير
+ * تحصيل. الفلوس بتدخل خزنة الفرع (أو البنك) وتتسجّل رصيد للتاجر.
+ *   مدين  خزنة الفرع / البنك
+ *       دائن  محفظة التاجر (التزام علينا)
+ */
+export function buildWalletDepositEntry(i: {
+  depositId: string;
+  merchantId: string;
+  amountP: Piastres;
+  /** cash → خزنة الفرع · bank/instapay/vodafone_cash → حساب مناسب */
+  method: string;
+  branchId?: string;
+}): DraftEntry {
+  if (i.amountP <= 0n) throw new Error("إيداع محفظة بمبلغ صفر مبيعملش قيد");
+  const source: AccountRef =
+    i.method === "vodafone_cash"
+      ? ACC.walletVodafone()
+      : i.method === "instapay"
+        ? ACC.walletInstapay()
+        : i.method === "bank"
+          ? ACC.companyBank()
+          : ACC.branchCash(i.branchId ?? "main");
+  return entry({
+    descriptionAr: "شحن محفظة التاجر",
+    sourceType: "manual",
+    sourceId: i.depositId,
+    kind: "wallet_deposit",
+    lines: [
+      { account: source, debitP: i.amountP, creditP: 0n, memo: "استلام شحن محفظة", merchantId: i.merchantId },
+      { account: ACC.merchantWallet(i.merchantId), debitP: 0n, creditP: i.amountP, memo: "رصيد محفظة", merchantId: i.merchantId },
     ],
   });
 }

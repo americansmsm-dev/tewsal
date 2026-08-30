@@ -17,10 +17,12 @@ import { sql } from "drizzle-orm";
 import { calcCodFee, type CodPercentBasis } from "@/lib/money";
 import type { ShipmentStatus } from "../domain/statusMachine";
 import {
+  ACC,
   buildDeliveryEntry,
   buildReturnEntry,
   buildCancellationEntry,
   buildDisposalEntry,
+  type AccountRef,
   type DraftEntry,
 } from "../domain/ledger";
 import type { SqlExecutor } from "./ledger";
@@ -42,6 +44,7 @@ interface FinShipment {
   price_p: string;
   zone_id: string;
   governorate_id: string;
+  is_wallet_order: boolean;
 }
 
 export interface FinancialTransitionParams {
@@ -61,7 +64,7 @@ export async function buildTransitionFinancialEntry(
   const ships = rowsOf<FinShipment>(
     await ex.execute(sql`
       SELECT id, awb, merchant_id, current_courier_id,
-             price_p::text, zone_id, governorate_id
+             price_p::text, zone_id, governorate_id, is_wallet_order
       FROM shipments WHERE id = ${params.shipmentId}::uuid
     `)
   );
@@ -69,6 +72,10 @@ export async function buildTransitionFinancialEntry(
   if (!ship) throw new HttpError(404, "NOT_FOUND", "الشحنة مش موجودة");
 
   const shippingP = BigInt(ship.price_p);
+  // أوردر محفظة → الرسوم تتخصم من محفظة التاجر بدل مستحقاته
+  const chargeAccount: AccountRef | undefined = ship.is_wallet_order
+    ? ACC.merchantWallet(ship.merchant_id)
+    : undefined;
 
   switch (params.to) {
     case "delivered":
@@ -91,6 +98,7 @@ export async function buildTransitionFinancialEntry(
         shippingP,
         codFeeP,
         otherFeesP,
+        chargeAccount,
       });
     }
 
@@ -103,6 +111,7 @@ export async function buildTransitionFinancialEntry(
         awb: ship.awb,
         shippingP: chargeShipping ? shippingP : 0n,
         returnFeeP,
+        chargeAccount,
       });
     }
 
@@ -116,6 +125,7 @@ export async function buildTransitionFinancialEntry(
         merchantId: ship.merchant_id,
         awb: ship.awb,
         shippingP,
+        chargeAccount,
       });
     }
 
@@ -129,6 +139,7 @@ export async function buildTransitionFinancialEntry(
         merchantId: ship.merchant_id,
         awb: ship.awb,
         shippingP,
+        chargeAccount,
       });
     }
 

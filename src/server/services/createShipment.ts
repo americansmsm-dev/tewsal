@@ -32,6 +32,8 @@ import { applyTransition, type Actor } from "./transition";
 import { buildTransitionFinancialEntry } from "./shipmentFinancials";
 import { isBlacklisted } from "./crm";
 import { pullFromStock } from "./fulfillment";
+import { walletBalance } from "./wallet";
+import { formatEGP } from "@/lib/money";
 import type { SqlExecutor } from "./ledger";
 import { HttpError } from "../http/respond";
 
@@ -199,6 +201,20 @@ export async function createShipment(
   const declaredValueP = input.declaredValue ? poundsToPiastres(input.declaredValue) : 0n;
   const shippingPayer = input.shippingPayer ?? merchant.default_shipping_payer;
 
+  // ═══ ٦.١) بوابة المحفظة — أوردر من غير تحصيل والشحن على التاجر ═══
+  // الشحن هيتخصم من محفظة التاجر، فالشحنة ماتتعملش لو الرصيد مايكفّيش.
+  const isWalletOrder = codAmountP === 0n && shippingPayer === "merchant";
+  if (isWalletOrder && priced.priceP > 0n) {
+    const bal = await walletBalance(ex, merchant.id);
+    if (bal.availableP < priced.priceP) {
+      throw new HttpError(
+        422,
+        "INSUFFICIENT_WALLET",
+        `رصيد المحفظة مايكفّيش شحن الأوردر ده. المطلوب ${formatEGP(priced.priceP)} · المتاح ${formatEGP(bal.availableP)}. اشحن المحفظة الأول.`
+      );
+    }
+  }
+
   // ═══ ٧) إدخال الشحنة ═══
   let shipmentId: string;
   try {
@@ -207,7 +223,7 @@ export async function createShipment(
         INSERT INTO shipments (
           awb, merchant_id, merchant_reference, recipient_name, recipient_phone, recipient_phone_alt,
           governorate_id, area_id, address_line, landmark, zone_id,
-          cod_amount_p, payment_method, shipping_payer, declared_value_p,
+          cod_amount_p, payment_method, shipping_payer, is_wallet_order, declared_value_p,
           pieces_count, allowed_open_pieces, weight_registered_kg,
           is_fragile, fragile_insured, notes_to_courier, service_type, status,
           price_p, price_list_id, tier_snapshot, total_fees_p, merchant_net_p,
@@ -217,7 +233,7 @@ export async function createShipment(
           ${input.recipientName}, ${recipientPhone}, ${input.recipientPhoneAlt ?? null},
           ${gov.id}::uuid, ${input.areaId ?? null}::uuid, ${input.addressLine}, ${input.landmark ?? null},
           ${gov.zone_id}::uuid,
-          ${codAmountP.toString()}::bigint, ${paymentMethod}, ${shippingPayer}, ${declaredValueP.toString()}::bigint,
+          ${codAmountP.toString()}::bigint, ${paymentMethod}, ${shippingPayer}, ${isWalletOrder}, ${declaredValueP.toString()}::bigint,
           ${input.piecesCount ?? 1}, ${allowedOpenPieces}, ${input.weightKg ?? null},
           ${input.isFragile ?? false}, ${input.fragileInsured ?? false},
           ${input.notesToCourier ?? null}, ${input.serviceType ?? "deliver"}, 'draft',
