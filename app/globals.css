@@ -63,8 +63,18 @@
     }
   }
 
-  * {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
     border-color: var(--border);
+  }
+  html,
+  body {
+    /* يمنع السكرول الأفقي والمنطقة السودا على الموبايل (clip مش hidden
+       عشان ميكسرش الهيدر الـ sticky) */
+    overflow-x: clip;
+    max-width: 100%;
   }
   html {
     -webkit-text-size-adjust: 100%;
@@ -76,6 +86,9 @@
     font-feature-settings: "kern";
     margin: 0;
     min-height: 100vh;
+  }
+  img {
+    max-width: 100%;
   }
   /* الأرقام العربية-الهندية عرض فقط — الإدخال والحساب لاتيني */
   a {

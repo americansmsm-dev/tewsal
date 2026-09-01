@@ -41,12 +41,17 @@ export function AppNav({ role }: { role: string }) {
       style={{
         display: "flex",
         gap: 4,
-        padding: "0 1.25rem",
+        padding: "0 0.75rem",
         background: "var(--surface)",
         borderBottom: "1px solid var(--border)",
         position: "sticky",
         top: 0,
         zIndex: 15,
+        // شريط بيسكرول أفقي جوّه نفسه على الموبايل بدل ما يطفح الصفحة
+        overflowX: "auto",
+        flexWrap: "nowrap",
+        WebkitOverflowScrolling: "touch",
+        scrollbarWidth: "none",
       }}
     >
       {items.map((i) => {
@@ -56,9 +61,11 @@ export function AppNav({ role }: { role: string }) {
             key={i.href}
             href={i.href}
             style={{
-              padding: "0.8rem 1rem",
+              padding: "0.8rem 0.85rem",
               fontWeight: 700,
               fontSize: "0.9rem",
+              whiteSpace: "nowrap",
+              flex: "0 0 auto",
               color: active ? "var(--color-orange-600)" : "var(--muted)",
               borderBottom: active ? "2px solid var(--color-orange-500)" : "2px solid transparent",
             }}
