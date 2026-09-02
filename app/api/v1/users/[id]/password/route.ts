@@ -10,7 +10,7 @@ import { ok, fail, handleError, notFound } from "@/server/http/respond";
 export const dynamic = "force-dynamic";
 const ADMIN = ["super_admin", "branch_manager"] as const;
 
-const schema = z.object({ password: z.string().min(6).max(72) });
+const schema = z.object({ password: z.string().min(8).max(72) });
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -18,7 +18,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const { id } = await params;
     if (!z.string().uuid().safeParse(id).success) return fail("BAD_REQUEST", "معرّف غير صالح", 400);
     const parsed = schema.safeParse(await req.json().catch(() => null));
-    if (!parsed.success) return fail("BAD_REQUEST", "الباسورد لازم ٦ حروف على الأقل", 400);
+    if (!parsed.success) return fail("BAD_REQUEST", "الباسورد لازم ٨ حروف على الأقل", 400);
 
     const hash = await hashPassword(parsed.data.password);
     const rows = await db.execute(sql`

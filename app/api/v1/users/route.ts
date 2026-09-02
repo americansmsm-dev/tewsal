@@ -29,7 +29,7 @@ const createSchema = z.object({
   phone: z.string().max(30).optional(),
   role: z.enum(CREATABLE_ROLES as unknown as [string, ...string[]]),
   /** المدير يقدر يحدّد الباسورد بنفسه — وإلا بيتولّد مؤقت */
-  password: z.string().min(6).max(72).optional(),
+  password: z.string().min(8, "الباسورد لازم ٨ حروف على الأقل").max(72).optional(),
 });
 
 /** باسورد مؤقت قوي وسهل القراءة */

@@ -260,7 +260,7 @@ function CreateMerchantModal({ onClose, onDone }: { onClose: () => void; onDone:
           </div>
           <div style={{ flex: 1 }}>
             <label className="label">الباسورد</label>
-            <input className="input" value={f.loginPassword} onChange={(e) => setF({ ...f, loginPassword: e.target.value })} dir="ltr" style={{ textAlign: "right" }} placeholder="٦ حروف — أو فاضي لتلقائي" />
+            <input className="input" value={f.loginPassword} onChange={(e) => setF({ ...f, loginPassword: e.target.value })} dir="ltr" style={{ textAlign: "right" }} placeholder="٨ حروف — أو فاضي لتلقائي" />
           </div>
         </div>
         <div style={{ fontSize: "0.72rem", color: "var(--muted)", marginTop: 6 }}>اسم الدخول: حروف إنجليزي وأرقام و _ . بس (من غير مسافات).</div>

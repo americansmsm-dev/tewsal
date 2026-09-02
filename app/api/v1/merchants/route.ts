@@ -35,7 +35,7 @@ const createSchema = z.object({
     .regex(/^[a-zA-Z0-9_.]+$/, "اسم الدخول: حروف إنجليزية وأرقام و _ . بس (من غير مسافات أو عربي)")
     .optional(),
   /** اختياري: الباسورد اللي الأدمن بيكتبه — وإلا بيتولّد مؤقت */
-  loginPassword: z.string().min(6, "الباسورد ٦ حروف على الأقل").max(72).optional(),
+  loginPassword: z.string().min(8, "الباسورد لازم ٨ حروف على الأقل").max(72).optional(),
 });
 
 function tempPassword(): string {

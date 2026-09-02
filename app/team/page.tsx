@@ -159,7 +159,7 @@ function ResetPasswordModal({ user, onClose, onDone }: { user: TeamUser; onClose
   async function submit() {
     setError(null);
     if (!usernameChanged && !pw) { setError("غيّر اسم الدخول أو الباسورد"); return; }
-    if (pw && pw.length < 6) { setError("الباسورد لازم ٦ حروف على الأقل"); return; }
+    if (pw && pw.length < 8) { setError("الباسورد لازم ٨ حروف على الأقل"); return; }
     setBusy(true);
     // اسم الدخول
     if (usernameChanged) {
@@ -204,7 +204,7 @@ function ResetPasswordModal({ user, onClose, onDone }: { user: TeamUser; onClose
           <label className="label">اسم الدخول</label>
           <input className="input" value={username} onChange={(e) => setUsername(e.target.value)} dir="ltr" style={{ textAlign: "right", marginBottom: "0.8rem" }} />
           <label className="label">باسورد جديد (سيبه فاضي لو مش هتغيّره)</label>
-          <input className="input" value={pw} onChange={(e) => setPw(e.target.value)} dir="ltr" style={{ textAlign: "right", marginBottom: "1rem" }} placeholder="٦ حروف على الأقل" />
+          <input className="input" value={pw} onChange={(e) => setPw(e.target.value)} dir="ltr" style={{ textAlign: "right", marginBottom: "1rem" }} placeholder="٨ حروف على الأقل" />
           {error && <ErrorBox msg={error} />}
           <div style={{ display: "flex", gap: 8 }}>
             <button className="btn btn-primary" style={{ flex: 1 }} disabled={busy} onClick={submit}>{busy ? "جاري..." : "حفظ"}</button>
@@ -309,7 +309,7 @@ function CreateUserModal({ onClose, onDone }: { onClose: () => void; onDone: () 
         ))}
       </select>
       <label className="label">الباسورد (سيبه فاضي لباسورد تلقائي)</label>
-      <input className="input" value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} dir="ltr" style={{ textAlign: "right", marginBottom: "1rem" }} placeholder="٦ حروف على الأقل — أو سيبه فاضي" />
+      <input className="input" value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} dir="ltr" style={{ textAlign: "right", marginBottom: "1rem" }} placeholder="٨ حروف على الأقل — أو سيبه فاضي" />
       {error && <ErrorBox msg={error} />}
       <div style={{ display: "flex", gap: 8 }}>
         <button
