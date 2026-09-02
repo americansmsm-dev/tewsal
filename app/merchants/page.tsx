@@ -35,6 +35,7 @@ export default function MerchantsPage() {
   const [q, setQ] = useState("");
   const dq = useDebounce(q, 350);
   const [showCreate, setShowCreate] = useState(false);
+  const [delMerchant, setDelMerchant] = useState<Merchant | null>(null);
 
   const load = useCallback(async () => {
     const params = new URLSearchParams();
@@ -123,13 +124,20 @@ export default function MerchantsPage() {
                       </span>
                     </Td>
                     <Td>
-                      <Link
-                        href={`/merchants/${m.id}`}
-                        className="btn btn-ghost"
-                        style={{ padding: "0.3rem 0.7rem", fontSize: "0.8rem" }}
-                      >
-                        كشف الحساب ←
-                      </Link>
+                      <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+                        <Link
+                          href={`/merchants/${m.id}`}
+                          className="btn btn-ghost"
+                          style={{ padding: "0.3rem 0.7rem", fontSize: "0.8rem" }}
+                        >
+                          كشف الحساب ←
+                        </Link>
+                        {canCreate && (
+                          <button className="btn btn-ghost" title="حذف التاجر"
+                            style={{ padding: "0.3rem 0.6rem", fontSize: "0.85rem", color: "var(--color-danger)", borderColor: "var(--color-danger)" }}
+                            onClick={() => setDelMerchant(m)}>🗑️</button>
+                        )}
+                      </div>
                     </Td>
                   </tr>
                 ))
@@ -139,6 +147,13 @@ export default function MerchantsPage() {
         </div>
       </main>
 
+      {delMerchant && (
+        <DeleteMerchantModal
+          merchant={delMerchant}
+          onClose={() => setDelMerchant(null)}
+          onDone={() => { setDelMerchant(null); load(); }}
+        />
+      )}
       {showCreate && (
         <CreateMerchantModal
           onClose={() => setShowCreate(false)}
@@ -260,6 +275,85 @@ function CreateMerchantModal({ onClose, onDone }: { onClose: () => void; onDone:
         </button>
       </div>
     </Overlay>
+  );
+}
+
+interface Assess {
+  name: string; payable: string; wallet: string; activeShipments: number; totalShipments: number;
+  canDelete: boolean; mode: "hard" | "soft" | "blocked"; blockers: string[];
+}
+function DeleteMerchantModal({ merchant, onClose, onDone }: { merchant: Merchant; onClose: () => void; onDone: () => void }) {
+  const [a, setA] = useState<Assess | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    apiCall<Assess>("GET", `/api/v1/merchants/${merchant.id}`).then((r) => {
+      if (r.ok && r.data) setA(r.data); else setError(r.error?.message ?? "تعذّر الفحص");
+    });
+  }, [merchant.id]);
+
+  async function confirmDelete() {
+    setBusy(true); setError(null);
+    const r = await apiCall("DELETE", `/api/v1/merchants/${merchant.id}`);
+    setBusy(false);
+    if (r.ok) onDone(); else setError(r.error?.message ?? "فشل الحذف");
+  }
+
+  return (
+    <Overlay onClose={onClose}>
+      <h3 style={{ marginTop: 0, marginBottom: "0.3rem" }}>حذف التاجر: {merchant.name_ar}</h3>
+      <p style={{ color: "var(--muted)", fontSize: "0.82rem", marginTop: 0, marginBottom: "1rem" }}>
+        بنتأكد الأول إن مفيش فلوس ليه ولا علينا قبل الحذف.
+      </p>
+      {!a ? (
+        <div style={{ padding: "1.5rem", textAlign: "center", color: "var(--muted)" }}>{error ?? "جاري الفحص..."}</div>
+      ) : (
+        <>
+          <div style={{ background: "var(--bg-soft)", borderRadius: 12, padding: "0.85rem", marginBottom: "1rem" }}>
+            <Line label="رصيد التاجر (مستحقات)" value={a.payable} />
+            <Line label="رصيد المحفظة" value={a.wallet} />
+            <Line label="شحنات شغّالة" value={`${a.activeShipments}`} />
+            <Line label="إجمالي الشحنات" value={`${a.totalShipments}`} />
+          </div>
+
+          {a.canDelete ? (
+            <>
+              <div style={{ background: "#16a34a12", border: "1px solid #16a34a33", borderRadius: 10, padding: "0.7rem 0.9rem", marginBottom: "1rem", fontSize: "0.85rem", color: "var(--color-success)", fontWeight: 600 }}>
+                ✅ الحساب متسوّى — ينفع يتحذف.
+                {a.mode === "soft" && <div style={{ color: "var(--muted)", fontWeight: 400, marginTop: 4 }}>عنده تاريخ شحنات، فهيتأرشف (يتوقف ويختفي من التشغيل) مع الحفاظ على سجل الفلوس القديم.</div>}
+                {a.mode === "hard" && <div style={{ color: "var(--muted)", fontWeight: 400, marginTop: 4 }}>تاجر من غير أي تاريخ — هيتحذف نهائيًا.</div>}
+              </div>
+              {error && <ErrorBox msg={error} />}
+              <div style={{ display: "flex", gap: 8 }}>
+                <button className="btn btn-primary" style={{ flex: 1, background: "var(--color-danger)" }} disabled={busy} onClick={confirmDelete}>
+                  {busy ? "جاري..." : a.mode === "hard" ? "احذف نهائيًا" : "أرشفة التاجر"}
+                </button>
+                <button className="btn btn-ghost" onClick={onClose}>إلغاء</button>
+              </div>
+            </>
+          ) : (
+            <>
+              <div style={{ background: "#dc262612", border: "1px solid #dc262633", borderRadius: 10, padding: "0.7rem 0.9rem", marginBottom: "1rem", fontSize: "0.85rem", color: "var(--color-danger)", fontWeight: 600 }}>
+                ⛔ مينفعش الحذف دلوقتي:
+                <ul style={{ margin: "0.4rem 0 0", paddingInlineStart: "1.2rem", fontWeight: 500 }}>
+                  {a.blockers.map((b, i) => <li key={i}>{b}</li>)}
+                </ul>
+              </div>
+              <button className="btn btn-ghost" style={{ width: "100%" }} onClick={onClose}>تمام</button>
+            </>
+          )}
+        </>
+      )}
+    </Overlay>
+  );
+}
+function Line({ label, value }: { label: string; value: string }) {
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", padding: "0.3rem 0" }}>
+      <span style={{ color: "var(--muted)", fontSize: "0.82rem" }}>{label}</span>
+      <b dir="ltr">{value}</b>
+    </div>
   );
 }
 

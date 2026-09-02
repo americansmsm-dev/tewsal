@@ -90,11 +90,11 @@ export async function GET(req: NextRequest) {
     await requireUser(req);
     const url = new URL(req.url);
     const role = url.searchParams.get("role");
+    // بيرجّع كل الحسابات — بما فيهم التجار — عشان الفريق يكون مجمّع
     const rows = await db.execute(sql`
-      SELECT id, full_name, username, phone, role, is_active, last_login_at, created_at
+      SELECT id, full_name, username, phone, role, merchant_id, is_active, last_login_at, created_at
       FROM users
-      WHERE role <> 'merchant'
-        ${role ? sql`AND role = ${role}` : sql``}
+      ${role ? sql`WHERE role = ${role}` : sql``}
       ORDER BY created_at DESC
     `);
     const list = (Array.isArray(rows) ? rows : (rows as { rows: Record<string, unknown>[] }).rows).map((u) => ({

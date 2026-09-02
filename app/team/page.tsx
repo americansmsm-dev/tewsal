@@ -18,6 +18,7 @@ interface TeamUser {
   phone: string | null;
   role: string;
   roleLabel: string;
+  merchant_id: string | null;
   is_active: boolean;
   last_login_at: string | null;
 }
@@ -118,7 +119,7 @@ export default function TeamPage() {
                     {canManage && (
                       <Td>
                         {u.role !== "super_admin" && (
-                          <button className="btn btn-ghost" style={{ padding: "0.25rem 0.6rem", fontSize: "0.78rem" }} onClick={() => setResetUser(u)}>🔑 غيّر الباسورد</button>
+                          <button className="btn btn-ghost" style={{ padding: "0.25rem 0.6rem", fontSize: "0.78rem" }} onClick={() => setResetUser(u)}>⚙️ إدارة الحساب</button>
                         )}
                       </Td>
                     )}
@@ -147,17 +148,30 @@ export default function TeamPage() {
 }
 
 function ResetPasswordModal({ user, onClose, onDone }: { user: TeamUser; onClose: () => void; onDone: () => void }) {
+  const [username, setUsername] = useState(user.username);
   const [pw, setPw] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
 
+  const usernameChanged = username.trim() !== user.username;
+
   async function submit() {
-    if (pw.length < 6) { setError("الباسورد لازم ٦ حروف على الأقل"); return; }
-    setBusy(true); setError(null);
-    const r = await apiCall("POST", `/api/v1/users/${user.id}/password`, { password: pw });
-    setBusy(false);
-    if (r.ok) setDone(true); else setError(r.error?.message ?? "فشل تغيير الباسورد");
+    setError(null);
+    if (!usernameChanged && !pw) { setError("غيّر اسم الدخول أو الباسورد"); return; }
+    if (pw && pw.length < 6) { setError("الباسورد لازم ٦ حروف على الأقل"); return; }
+    setBusy(true);
+    // اسم الدخول
+    if (usernameChanged) {
+      const r = await apiCall("PATCH", `/api/v1/users/${user.id}`, { username: username.trim() });
+      if (!r.ok) { setBusy(false); setError(r.error?.message ?? "فشل تغيير اسم الدخول"); return; }
+    }
+    // الباسورد
+    if (pw) {
+      const r = await apiCall("POST", `/api/v1/users/${user.id}/password`, { password: pw });
+      if (!r.ok) { setBusy(false); setError(r.error?.message ?? "فشل تغيير الباسورد"); return; }
+    }
+    setBusy(false); setDone(true);
   }
 
   return (
@@ -165,22 +179,35 @@ function ResetPasswordModal({ user, onClose, onDone }: { user: TeamUser; onClose
       {done ? (
         <div style={{ textAlign: "center" }}>
           <div style={{ fontSize: "2rem" }}>✅</div>
-          <h3 style={{ margin: "0.3rem 0" }}>اتغيّر الباسورد</h3>
-          <p style={{ color: "var(--muted)", fontSize: "0.85rem" }}>الباسورد الجديد لـ {user.full_name}:</p>
-          <div style={{ background: "var(--bg-soft)", borderRadius: 12, padding: "0.8rem", margin: "0.5rem 0 1rem" }}>
-            <span dir="ltr" style={{ fontWeight: 800, fontFamily: "monospace", fontSize: "1.05rem", color: "var(--color-orange-600)" }}>{pw}</span>
+          <h3 style={{ margin: "0.3rem 0" }}>اتحدّث الحساب</h3>
+          <p style={{ color: "var(--muted)", fontSize: "0.85rem" }}>بيانات {user.full_name}:</p>
+          <div style={{ background: "var(--bg-soft)", borderRadius: 12, padding: "0.8rem", margin: "0.5rem 0 1rem", textAlign: "right" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", padding: "0.25rem 0" }}>
+              <span style={{ color: "var(--muted)", fontSize: "0.8rem" }}>اسم الدخول</span>
+              <span dir="ltr" style={{ fontWeight: 800, fontFamily: "monospace" }}>{username.trim()}</span>
+            </div>
+            {pw && (
+              <div style={{ display: "flex", justifyContent: "space-between", padding: "0.25rem 0" }}>
+                <span style={{ color: "var(--muted)", fontSize: "0.8rem" }}>الباسورد</span>
+                <span dir="ltr" style={{ fontWeight: 800, fontFamily: "monospace", color: "var(--color-orange-600)" }}>{pw}</span>
+              </div>
+            )}
           </div>
           <button className="btn btn-primary" style={{ width: "100%" }} onClick={onDone}>تمام</button>
         </div>
       ) : (
         <>
-          <h3 style={{ marginTop: 0, marginBottom: "0.4rem" }}>تغيير باسورد {user.full_name}</h3>
-          <p style={{ color: "var(--muted)", fontSize: "0.82rem", marginTop: 0 }}>اسم المستخدم: <span dir="ltr">{user.username}</span></p>
-          <label className="label">الباسورد الجديد</label>
+          <h3 style={{ marginTop: 0, marginBottom: "0.2rem" }}>إدارة حساب {user.full_name}</h3>
+          <p style={{ color: "var(--muted)", fontSize: "0.8rem", marginTop: 0, marginBottom: "0.8rem" }}>
+            {user.roleLabel} · غيّر اسم الدخول أو الباسورد أي وقت
+          </p>
+          <label className="label">اسم الدخول</label>
+          <input className="input" value={username} onChange={(e) => setUsername(e.target.value)} dir="ltr" style={{ textAlign: "right", marginBottom: "0.8rem" }} />
+          <label className="label">باسورد جديد (سيبه فاضي لو مش هتغيّره)</label>
           <input className="input" value={pw} onChange={(e) => setPw(e.target.value)} dir="ltr" style={{ textAlign: "right", marginBottom: "1rem" }} placeholder="٦ حروف على الأقل" />
           {error && <ErrorBox msg={error} />}
           <div style={{ display: "flex", gap: 8 }}>
-            <button className="btn btn-primary" style={{ flex: 1 }} disabled={busy || pw.length < 6} onClick={submit}>{busy ? "جاري..." : "غيّر الباسورد"}</button>
+            <button className="btn btn-primary" style={{ flex: 1 }} disabled={busy} onClick={submit}>{busy ? "جاري..." : "حفظ"}</button>
             <button className="btn btn-ghost" onClick={onClose}>إلغاء</button>
           </div>
         </>
