@@ -21,6 +21,7 @@ interface Task {
   recipient_name: string; recipient_phone: string;
   address_line: string; landmark: string | null;
   cod_amount_p: string; governorate: string; current_courier_id: string | null;
+  merchant_name?: string;
 }
 interface Summary {
   cashInHand: string; commissions: string; receivable: string; receivableP: string;
@@ -61,7 +62,7 @@ export default function CourierApp() {
 
   const load = useCallback(async () => {
     const [t, s, a, w] = await Promise.all([
-      apiCall<{ shipments: Task[] }>("GET", "/api/v1/shipments?status=out_for_delivery&limit=100"),
+      apiCall<{ shipments: Task[] }>("GET", "/api/v1/shipments?status=pickup_assigned,out_for_delivery,out_for_return&limit=100"),
       apiCall<Summary>("GET", "/api/v1/courier/summary"),
       apiCall<{ checkedIn: boolean; checkedOut: boolean }>("GET", "/api/v1/courier/field"),
       apiCall<WorkHours>("GET", "/api/v1/settings/work-hours"),
@@ -222,7 +223,7 @@ function HomeTab({ me, sum, att, work, tasks, attend, goTasks, loading }: {
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
         <Stat icon="✅" label="تسليمات النهاردة" value={loading ? "…" : toArabicDigits(sum?.today.delivered ?? 0)} tone="success" />
         <Stat icon="🎯" label="نسبة النجاح" value={sum?.today.successRate == null ? "—" : `${toArabicDigits(sum.today.successRate)}٪`} />
-        <Stat icon="🛵" label="خارجة معايا" value={loading ? "…" : toArabicDigits(tasks.length)} />
+        <Stat icon="🛵" label="مهامي" value={loading ? "…" : toArabicDigits(tasks.length)} />
         <Stat icon="⚠️" label="تعذّرت النهاردة" value={loading ? "…" : toArabicDigits(sum?.today.failed ?? 0)} tone={sum && sum.today.failed > 0 ? "warn" : undefined} />
       </div>
 
@@ -250,6 +251,15 @@ function Stat({ icon, label, value, tone }: { icon: string; label: string; value
 }
 
 // ─────────────────────────── مهامي ───────────────────────────
+/** نوع المهمة حسب الحالة — استلام من التاجر / توصيل للعميل / إرجاع للتاجر */
+interface TaskKind { badge: string; tone: string; btn: string; toMerchant: boolean }
+const DELIVERY_KIND: TaskKind = { badge: "🛵 توصيل للعميل", tone: "#16a34a", btn: "تسليم / تعذّر", toMerchant: false };
+const TASK_KIND: Record<string, TaskKind> = {
+  pickup_assigned: { badge: "📦 استلام من التاجر", tone: "#2563eb", btn: "تأكيد الاستلام", toMerchant: true },
+  out_for_return: { badge: "↩️ إرجاع للتاجر", tone: "#d97706", btn: "تأكيد الإرجاع", toMerchant: true },
+  out_for_delivery: DELIVERY_KIND,
+};
+
 function TasksTab({ tasks, loading, onPick, onDetail }: { tasks: Task[]; loading: boolean; onPick: (t: Task) => void; onDetail: (t: Task) => void }) {
   return (
     <div>
@@ -261,19 +271,23 @@ function TasksTab({ tasks, loading, onPick, onDetail }: { tasks: Task[]; loading
         <div className="card" style={{ padding: "2rem", textAlign: "center", color: "var(--muted)" }}>جاري التحميل...</div>
       ) : tasks.length === 0 ? (
         <div className="card" style={{ padding: "2.5rem 1rem", textAlign: "center", color: "var(--muted)" }}>
-          <div style={{ fontSize: "2.5rem" }}>🎉</div>مفيش شحنات خارجة معاك دلوقتي
+          <div style={{ fontSize: "2.5rem" }}>🎉</div>مفيش مهام معاك دلوقتي
         </div>
       ) : (
         <div style={{ display: "grid", gap: 12 }}>
           {tasks.map((t) => {
-            const hasCod = BigInt(t.cod_amount_p || "0") > 0n;
+            const k = TASK_KIND[t.status] ?? DELIVERY_KIND;
+            const hasCod = !k.toMerchant && BigInt(t.cod_amount_p || "0") > 0n;
+            // للاستلام والإرجاع الطرف هو التاجر مش العميل — نعرض اسم التاجر ونخفي بيانات العميل الغلط
+            const title = k.toMerchant ? `التاجر: ${t.merchant_name ?? "—"}` : t.recipient_name;
             return (
-              <div key={t.id} className="card" style={{ padding: "1rem" }}>
+              <div key={t.id} className="card" style={{ padding: "1rem", borderInlineStart: `4px solid ${k.tone}` }}>
+                <div style={{ display: "inline-block", fontSize: "0.72rem", fontWeight: 800, color: k.tone, marginBottom: "0.4rem" }}>{k.badge}</div>
                 <div onClick={() => onDetail(t)} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8, cursor: "pointer" }}>
                   <div>
-                    <div style={{ fontWeight: 800, fontSize: "1.05rem" }}>{t.recipient_name} <span style={{ fontSize: "0.75rem", color: "var(--color-orange-600)", fontWeight: 700 }}>ℹ️ تفاصيل</span></div>
-                    <div style={{ fontSize: "0.85rem", color: "var(--muted)" }}>{t.governorate} · {t.address_line}</div>
-                    {t.landmark && <div style={{ fontSize: "0.78rem", color: "var(--muted)" }}>📍 {t.landmark}</div>}
+                    <div style={{ fontWeight: 800, fontSize: "1.05rem" }}>{title} <span style={{ fontSize: "0.75rem", color: "var(--color-orange-600)", fontWeight: 700 }}>ℹ️ تفاصيل</span></div>
+                    <div style={{ fontSize: "0.85rem", color: "var(--muted)" }}>{t.governorate}{!k.toMerchant && ` · ${t.address_line}`}</div>
+                    {!k.toMerchant && t.landmark && <div style={{ fontSize: "0.78rem", color: "var(--muted)" }}>📍 {t.landmark}</div>}
                   </div>
                   <span dir="ltr" style={{ fontSize: "0.72rem", color: "var(--muted)", fontWeight: 700 }}>{t.awb}</span>
                 </div>
@@ -283,11 +297,13 @@ function TasksTab({ tasks, loading, onPick, onDetail }: { tasks: Task[]; loading
                     <div style={{ fontSize: "2rem", fontWeight: 800, color: "var(--color-orange-600)" }}>{egp(t.cod_amount_p)} <span style={{ fontSize: "1rem" }}>ج</span></div>
                   </div>
                 )}
-                <div style={{ display: "flex", gap: 8 }}>
-                  <a href={`tel:${t.recipient_phone}`} className="btn btn-ghost" style={{ flex: "0 0 auto", padding: "0.6rem 0.8rem" }}>📞</a>
-                  <a href={`https://wa.me/2${t.recipient_phone}`} target="_blank" rel="noopener noreferrer" className="btn btn-ghost" style={{ flex: "0 0 auto", padding: "0.6rem 0.8rem" }}>💬</a>
-                  <a href={`https://maps.google.com/?q=${encodeURIComponent(t.governorate + " " + t.address_line)}`} target="_blank" rel="noopener noreferrer" className="btn btn-ghost" style={{ flex: "0 0 auto", padding: "0.6rem 0.8rem" }}>🗺️</a>
-                  <button className="btn btn-primary" style={{ flex: 1, padding: "0.7rem" }} onClick={() => onPick(t)}>تسليم / تعذّر</button>
+                <div style={{ display: "flex", gap: 8, marginTop: "0.8rem" }}>
+                  {!k.toMerchant && <>
+                    <a href={`tel:${t.recipient_phone}`} className="btn btn-ghost" style={{ flex: "0 0 auto", padding: "0.6rem 0.8rem" }}>📞</a>
+                    <a href={`https://wa.me/2${t.recipient_phone}`} target="_blank" rel="noopener noreferrer" className="btn btn-ghost" style={{ flex: "0 0 auto", padding: "0.6rem 0.8rem" }}>💬</a>
+                    <a href={`https://maps.google.com/?q=${encodeURIComponent(t.governorate + " " + t.address_line)}`} target="_blank" rel="noopener noreferrer" className="btn btn-ghost" style={{ flex: "0 0 auto", padding: "0.6rem 0.8rem" }}>🗺️</a>
+                  </>}
+                  <button className="btn btn-primary" style={{ flex: 1, padding: "0.7rem" }} onClick={() => onPick(t)}>{k.btn}</button>
                 </div>
               </div>
             );

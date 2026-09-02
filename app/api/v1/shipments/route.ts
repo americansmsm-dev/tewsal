@@ -95,13 +95,14 @@ export async function GET(req: NextRequest) {
   try {
     const ctx = await requireUser(req);
     const url = new URL(req.url);
-    const status = url.searchParams.get("status");
+    const statusParam = url.searchParams.get("status"); // حالة واحدة أو أكتر مفصولة بفاصلة
+    const statuses = statusParam ? statusParam.split(",").map((s) => s.trim()).filter(Boolean) : [];
     const merchantId = url.searchParams.get("merchantId");
     const q = url.searchParams.get("q");
     const limit = Math.min(Number(url.searchParams.get("limit") ?? 50), 200);
     const cursor = url.searchParams.get("cursor"); // created_at ISO للصفحة الجاية
 
-    if (status && !(SHIPMENT_STATUSES as readonly string[]).includes(status)) {
+    if (statuses.some((s) => !(SHIPMENT_STATUSES as readonly string[]).includes(s))) {
       return fail("BAD_REQUEST", "حالة غير معروفة", 400);
     }
 
@@ -117,11 +118,12 @@ export async function GET(req: NextRequest) {
       SELECT s.id, s.awb, s.status, s.recipient_name, s.recipient_phone,
              s.cod_amount_p::text, s.price_p::text, s.total_fees_p::text,
              s.address_line, s.landmark, s.current_courier_id,
-             s.created_at, g.name_ar AS governorate
+             s.created_at, g.name_ar AS governorate, m.name_ar AS merchant_name
       FROM shipments s
       JOIN governorates g ON g.id = s.governorate_id
+      JOIN merchants m ON m.id = s.merchant_id
       WHERE 1=1
-        ${status ? sql`AND s.status = ${status}` : sql``}
+        ${statuses.length ? sql`AND s.status IN (${sql.join(statuses.map((s) => sql`${s}`), sql`, `)})` : sql``}
         ${merchantId ? sql`AND s.merchant_id = ${merchantId}::uuid` : sql``}
         ${q ? sql`AND (s.awb ILIKE ${"%" + q + "%"} OR s.recipient_name ILIKE ${"%" + q + "%"} OR s.recipient_phone ILIKE ${"%" + q + "%"})` : sql``}
         ${cursor ? sql`AND s.created_at < ${cursor}` : sql``}
