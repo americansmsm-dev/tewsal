@@ -3,9 +3,13 @@
  * GET: حالة الحضور · POST: { action: 'location', lat, lng } | { action: 'check_in'|'check_out' }
  */
 import { type NextRequest } from "next/server";
+import { sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/server/db";
 import { recordLocation, attendance, myAttendance } from "@/server/services/field";
+import { accountBalance } from "@/server/services/ledger";
+import { ACC } from "@/server/domain/ledger";
+import { formatEGP } from "@/lib/money";
 import { requireRole } from "@/server/http/context";
 import { ok, fail, handleError } from "@/server/http/respond";
 
@@ -31,6 +35,22 @@ export async function POST(req: NextRequest) {
     if (!parsed.success) return fail("BAD_REQUEST", "بيانات ناقصة", 400);
     const b = parsed.data;
     const uid = ctx.user.userId!;
+
+    // 🔒 ممنوع الانصراف والمندوب لسه ماسك عهدة — كاش أو طرود مستلمة
+    if (b.action === "check_out") {
+      const cashP = await accountBalance(db, ACC.courierCash(uid));
+      if (cashP > 0n) {
+        return fail("CUSTODY_CASH", `عندك عهدة كاش ${formatEGP(cashP)} — سلّمها للكاشير قبل الانصراف`, 422);
+      }
+      const heldRows = await db.execute(sql`
+        SELECT COUNT(*)::int AS n FROM shipments
+        WHERE current_courier_id = ${uid}::uuid AND status = 'picked_up'`);
+      const held = (Array.isArray(heldRows) ? heldRows : (heldRows as { rows: { n: number }[] }).rows)[0] as { n: number } | undefined;
+      if (held && held.n > 0) {
+        return fail("CUSTODY_PARCELS", `عندك ${held.n} شحنة مستلمة لسه معاك — سلّمها للمخزن قبل الانصراف`, 422);
+      }
+    }
+
     let result: unknown;
     await db.transaction(async (tx) => {
       result = b.action === "location" ? await recordLocation(tx, { courierId: uid, lat: b.lat, lng: b.lng }) : await attendance(tx, { courierId: uid, action: b.action });

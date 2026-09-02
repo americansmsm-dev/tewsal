@@ -59,6 +59,7 @@ export default function CourierApp() {
   const [att, setAtt] = useState<{ checkedIn: boolean; checkedOut: boolean } | null>(null);
   const [work, setWork] = useState<WorkHours | null>(null);
   const [pending, setPending] = useState(0);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const [t, s, a, w] = await Promise.all([
@@ -76,7 +77,9 @@ export default function CourierApp() {
   }, []);
 
   async function attend(action: "check_in" | "check_out") {
-    await apiCall("POST", "/api/v1/courier/field", { action });
+    const r = await apiCall("POST", "/api/v1/courier/field", { action });
+    if (!r.ok) { setNotice(r.error?.message ?? "تعذّر تنفيذ العملية"); return; }
+    setNotice(null);
     load();
   }
 
@@ -142,6 +145,13 @@ export default function CourierApp() {
       </header>
 
       <main style={{ padding: "1rem" }}>
+        {notice && (
+          <div onClick={() => setNotice(null)} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: "0.9rem", padding: "0.75rem 0.9rem", borderRadius: 12, background: "#dc262618", border: "1px solid #dc262633", color: "#dc2626", fontSize: "0.86rem", fontWeight: 700, cursor: "pointer" }}>
+            <span style={{ fontSize: "1.1rem" }}>⚠️</span>
+            <span style={{ flex: 1 }}>{notice}</span>
+            <span style={{ opacity: 0.6, fontSize: "0.75rem" }}>✕</span>
+          </div>
+        )}
         {tab === "home" && <HomeTab me={me} sum={sum} att={att} work={work} tasks={tasks} attend={attend} goTasks={() => setTab("tasks")} loading={loading} />}
         {tab === "tasks" && <TasksTab tasks={tasks} loading={loading} onPick={setActive} onDetail={setDetailTask} />}
         {tab === "custody" && <CustodyTab sum={sum} />}
