@@ -48,6 +48,7 @@ export function TransitionModal({
   currentStatus,
   currentCourierId,
   role,
+  expectedCodP,
   onClose,
   onDone,
 }: {
@@ -56,6 +57,8 @@ export function TransitionModal({
   currentStatus: ShipmentStatus;
   currentCourierId: string | null;
   role: Role;
+  /** مبلغ التحصيل المسجّل على الشحنة (قروش) — للمندوب بيتقفل في التسليم الكامل */
+  expectedCodP?: string;
   onClose: () => void;
   onDone: () => void;
 }) {
@@ -82,6 +85,11 @@ export function TransitionModal({
   const itemsTotal = items
     .filter((it) => deliveredIds.has(it.id))
     .reduce((s, it) => s + Number(BigInt(it.unitPriceP)) * it.qty, 0) / 100;
+
+  // المبلغ المسجّل على الشحنة (بالجنيه) — للعرض والقفل
+  const expectedCodStr = expectedCodP != null && expectedCodP !== "" ? (Number(expectedCodP) / 100).toFixed(2) : null;
+  // 🔒 المندوب: التسليم الكامل المبلغ ثابت (= المسجّل) — التعديل متاح بس في التسليم الجزئي
+  const lockCod = role === "courier" && toStatus === "delivered" && expectedCodStr !== null;
 
   // صورة الإثبات
   const [photoKey, setPhotoKey] = useState<string | null>(null);
@@ -150,7 +158,7 @@ export function TransitionModal({
       body.deliveredItemIds = [...deliveredIds];
       body.cod = { collected: itemsTotal.toFixed(2), method: codMethod };
     } else if (requires.includes("cod_amount")) {
-      body.cod = { collected: codCollected, method: codMethod };
+      body.cod = { collected: lockCod ? expectedCodStr! : codCollected, method: codMethod };
     }
     if (requires.includes("reason_code")) body.reasonCode = reasonCode;
     if (rescheduledAt && toStatus === "delivery_failed") {
@@ -267,13 +275,15 @@ export function TransitionModal({
             <label className="label">المبلغ المحصّل (ج)</label>
             <input
               className="input"
-              value={codCollected}
+              value={lockCod ? expectedCodStr! : codCollected}
               onChange={(e) => setCodCollected(e.target.value)}
+              disabled={lockCod}
               inputMode="decimal"
               dir="ltr"
-              style={{ textAlign: "right" }}
+              style={{ textAlign: "right", ...(lockCod ? { opacity: 0.7, background: "var(--bg-soft)" } : {}) }}
               placeholder="0.00"
             />
+            {lockCod && <div style={{ fontSize: "0.72rem", color: "var(--muted)", marginTop: 4 }}>المبلغ الكامل ثابت — لو العميل أخد جزء بس، اختار «تسليم جزئي»</div>}
           </div>
           <div style={{ width: 140 }}>
             <label className="label">الطريقة</label>

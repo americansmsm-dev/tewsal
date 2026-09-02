@@ -181,6 +181,7 @@ export default function CourierApp() {
         <TransitionModal
           shipmentId={active.id} awb={active.awb} currentStatus={active.status}
           currentCourierId={active.current_courier_id ?? me.id} role={"courier" as Role}
+          expectedCodP={active.cod_amount_p}
           onClose={() => setActive(null)} onDone={() => { setActive(null); load(); }}
         />
       )}
