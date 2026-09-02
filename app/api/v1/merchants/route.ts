@@ -20,16 +20,22 @@ export const dynamic = "force-dynamic";
 const ADMIN = ["super_admin", "branch_manager"] as const;
 
 const createSchema = z.object({
-  code: z.string().min(1).max(40),
-  nameAr: z.string().min(1).max(200),
+  code: z.string().min(1, "اكتب كود التاجر").max(40),
+  nameAr: z.string().min(1, "اكتب اسم التاجر").max(200),
   phone: z.string().max(30).optional(),
-  email: z.string().email().max(200).optional(),
+  email: z.string().email("إيميل غير صالح").max(200).optional(),
   tier: z.enum(["t1", "t2", "t3"]).optional(),
   codEnabled: z.boolean().optional(),
   defaultShippingPayer: z.enum(["merchant", "customer"]).optional(),
   notes: z.string().max(1000).optional(),
   /** اختياري: افتح حساب دخول للتاجر على البوابة */
-  loginUsername: z.string().min(3).max(40).regex(/^[a-zA-Z0-9_.]+$/).optional(),
+  loginUsername: z.string()
+    .min(3, "اسم الدخول ٣ حروف على الأقل")
+    .max(40)
+    .regex(/^[a-zA-Z0-9_.]+$/, "اسم الدخول: حروف إنجليزية وأرقام و _ . بس (من غير مسافات أو عربي)")
+    .optional(),
+  /** اختياري: الباسورد اللي الأدمن بيكتبه — وإلا بيتولّد مؤقت */
+  loginPassword: z.string().min(6, "الباسورد ٦ حروف على الأقل").max(72).optional(),
 });
 
 function tempPassword(): string {
@@ -65,15 +71,16 @@ export async function POST(req: NextRequest) {
         };
 
         // اختياري: حساب دخول للتاجر على البوابة
-        let login: { username: string; tempPassword: string } | null = null;
+        let login: { username: string; tempPassword: string; custom: boolean } | null = null;
         if (m.loginUsername) {
-          const pw = tempPassword();
+          const custom = !!m.loginPassword;
+          const pw = m.loginPassword ?? tempPassword();
           const hash = await hashPassword(pw);
           await tx.execute(sql`
             INSERT INTO users (full_name, username, phone, password_hash, role, merchant_id, must_change_password)
-            VALUES (${m.nameAr}, ${m.loginUsername}, ${phone}, ${hash}, 'merchant', ${merchant.id}::uuid, true)
+            VALUES (${m.nameAr}, ${m.loginUsername}, ${phone}, ${hash}, 'merchant', ${merchant.id}::uuid, ${!custom})
           `);
-          login = { username: m.loginUsername, tempPassword: pw };
+          login = { username: m.loginUsername, tempPassword: pw, custom };
         }
         return { merchant, login };
       });

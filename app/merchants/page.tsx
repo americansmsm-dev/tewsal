@@ -153,10 +153,10 @@ export default function MerchantsPage() {
 }
 
 function CreateMerchantModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
-  const [f, setF] = useState({ code: "", nameAr: "", phone: "", tier: "t1", codEnabled: true, withLogin: false, loginUsername: "" });
+  const [f, setF] = useState({ code: "", nameAr: "", phone: "", tier: "t1", codEnabled: true, loginUsername: "", loginPassword: "" });
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [login, setLogin] = useState<{ username: string; tempPassword: string } | null>(null);
+  const [login, setLogin] = useState<{ username: string; tempPassword: string; custom: boolean } | null>(null);
 
   async function submit() {
     setError(null);
@@ -168,8 +168,11 @@ function CreateMerchantModal({ onClose, onDone }: { onClose: () => void; onDone:
       codEnabled: f.codEnabled,
     };
     if (f.phone) body.phone = f.phone;
-    if (f.withLogin && f.loginUsername) body.loginUsername = f.loginUsername;
-    const r = await apiCall<{ login: { username: string; tempPassword: string } | null }>("POST", "/api/v1/merchants", body);
+    if (f.loginUsername.trim()) {
+      body.loginUsername = f.loginUsername.trim();
+      if (f.loginPassword) body.loginPassword = f.loginPassword;
+    }
+    const r = await apiCall<{ login: { username: string; tempPassword: string; custom: boolean } | null }>("POST", "/api/v1/merchants", body);
     setBusy(false);
     if (r.ok) {
       if (r.data?.login) setLogin(r.data.login);
@@ -183,14 +186,14 @@ function CreateMerchantModal({ onClose, onDone }: { onClose: () => void; onDone:
         <div style={{ textAlign: "center" }}>
           <div style={{ fontSize: "2.2rem" }}>✅</div>
           <h3 style={{ margin: "0.4rem 0" }}>اتفتح حساب التاجر ودخوله</h3>
-          <p style={{ color: "var(--muted)", fontSize: "0.85rem", margin: "0 0 1rem" }}>سلّم التاجر البيانات دي — الباسورد بيتغيّر أول دخول</p>
+          <p style={{ color: "var(--muted)", fontSize: "0.85rem", margin: "0 0 1rem" }}>سلّم التاجر البيانات دي{login.custom ? "" : " — الباسورد بيتغيّر أول دخول"}</p>
           <div style={{ background: "var(--bg-soft)", border: "1px solid var(--border)", borderRadius: 12, padding: "0.85rem", textAlign: "right", marginBottom: "1rem" }}>
             <div style={{ display: "flex", justifyContent: "space-between", padding: "0.35rem 0" }}>
               <span style={{ color: "var(--muted)", fontSize: "0.82rem" }}>اسم الدخول</span>
               <span dir="ltr" style={{ fontWeight: 800, fontFamily: "monospace" }}>{login.username}</span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", padding: "0.35rem 0" }}>
-              <span style={{ color: "var(--muted)", fontSize: "0.82rem" }}>الباسورد المؤقت</span>
+              <span style={{ color: "var(--muted)", fontSize: "0.82rem" }}>{login.custom ? "الباسورد" : "الباسورد المؤقت"}</span>
               <span dir="ltr" style={{ fontWeight: 800, fontFamily: "monospace", fontSize: "1.05rem", color: "var(--color-orange-600)" }}>{login.tempPassword}</span>
             </div>
           </div>
@@ -231,16 +234,22 @@ function CreateMerchantModal({ onClose, onDone }: { onClose: () => void; onDone:
         <input type="checkbox" checked={f.codEnabled} onChange={(e) => setF({ ...f, codEnabled: e.target.checked })} />
         خدمة التحصيل مفعّلة
       </label>
-      <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: f.withLogin ? "0.6rem" : "1rem", fontSize: "0.85rem" }}>
-        <input type="checkbox" checked={f.withLogin} onChange={(e) => setF({ ...f, withLogin: e.target.checked })} />
-        افتح حساب دخول للتاجر على البوابة
-      </label>
-      {f.withLogin && (
-        <div style={{ marginBottom: "1rem" }}>
-          <label className="label">اسم دخول التاجر</label>
-          <input className="input" value={f.loginUsername} onChange={(e) => setF({ ...f, loginUsername: e.target.value })} dir="ltr" style={{ textAlign: "right" }} placeholder="merchant_login" />
+      {/* حساب دخول التاجر — أساسي عشان يستخدم البوابة */}
+      <div style={{ background: "var(--bg-soft)", border: "1px solid var(--border)", borderRadius: 12, padding: "0.85rem", marginBottom: "1rem" }}>
+        <div style={{ fontWeight: 800, fontSize: "0.9rem", marginBottom: 2 }}>🔑 حساب دخول التاجر</div>
+        <div style={{ fontSize: "0.76rem", color: "var(--muted)", marginBottom: 8 }}>عشان التاجر يدخل البوابة. سيبهم فاضيين لو مش هتفتح له حساب دلوقتي.</div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <div style={{ flex: 1 }}>
+            <label className="label">اسم الدخول (username)</label>
+            <input className="input" value={f.loginUsername} onChange={(e) => setF({ ...f, loginUsername: e.target.value })} dir="ltr" style={{ textAlign: "right" }} placeholder="merchant1" />
+          </div>
+          <div style={{ flex: 1 }}>
+            <label className="label">الباسورد</label>
+            <input className="input" value={f.loginPassword} onChange={(e) => setF({ ...f, loginPassword: e.target.value })} dir="ltr" style={{ textAlign: "right" }} placeholder="٦ حروف — أو فاضي لتلقائي" />
+          </div>
         </div>
-      )}
+        <div style={{ fontSize: "0.72rem", color: "var(--muted)", marginTop: 6 }}>اسم الدخول: حروف إنجليزي وأرقام و _ . بس (من غير مسافات).</div>
+      </div>
       {error && <ErrorBox msg={error} />}
       <div style={{ display: "flex", gap: 8 }}>
         <button className="btn btn-primary" style={{ flex: 1 }} disabled={busy || !f.code || !f.nameAr} onClick={submit}>

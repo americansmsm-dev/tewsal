@@ -50,6 +50,7 @@ export function CreateShipmentModal({
     landmark: "",
     codAmount: "",
     paymentMethod: "cash",
+    shippingPayer: "merchant",
     declaredValue: "",
     piecesCount: "1",
     weightKg: "",
@@ -97,6 +98,7 @@ export function CreateShipmentModal({
       governorateId: f.governorateId,
       addressLine: f.addressLine,
       paymentMethod: f.paymentMethod,
+      shippingPayer: f.shippingPayer,
       confirm: f.confirm,
     };
     if (f.codAmount) body.codAmount = f.codAmount;
@@ -258,6 +260,19 @@ export function CreateShipmentModal({
             <option value="instapay">إنستاباي</option>
             <option value="prepaid">مدفوع مقدمًا</option>
           </select>
+        </div>
+      </div>
+
+      <div style={{ marginBottom: "0.8rem" }}>
+        <label className="label">الشحن على مين؟</label>
+        <select className="input" value={f.shippingPayer} onChange={(e) => set("shippingPayer", e.target.value)}>
+          <option value="merchant">على التاجر (بيتخصم من مستحقاتي)</option>
+          <option value="customer">على العميل (بيتضاف على المبلغ اللي بيدفعه)</option>
+        </select>
+        <div style={{ fontSize: "0.72rem", color: "var(--muted)", marginTop: 4 }}>
+          {f.shippingPayer === "customer"
+            ? "العميل بيدفع قيمة البضاعة + الشحن."
+            : "الشحن بيتخصم من مستحقاتك — أوردر من غير تحصيل بياخد شحنه من محفظتك."}
         </div>
       </div>
 

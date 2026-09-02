@@ -209,6 +209,12 @@ export async function createShipment(
   const declaredValueP = input.declaredValue ? poundsToPiastres(input.declaredValue) : 0n;
   const shippingPayer = input.shippingPayer ?? merchant.default_shipping_payer;
 
+  // الشحن على العميل: بيتضاف على المبلغ المحصّل (العميل بيدفع البضاعة + الشحن).
+  // كده صافي التاجر = قيمة البضاعة، والشحن بيتحصّل من العميل ويبقى إيراد —
+  // بدون أي لمس للدفتر (نفس منطق التسليم بيتكفّل بالباقي).
+  const storedCodP =
+    shippingPayer === "customer" && codAmountP > 0n ? codAmountP + priced.priceP : codAmountP;
+
   // ═══ ٦.١) بوابة المحفظة — أوردر من غير تحصيل والشحن على التاجر ═══
   // الشحن هيتخصم من محفظة التاجر، فالشحنة ماتتعملش لو الرصيد مايكفّيش.
   const isWalletOrder = codAmountP === 0n && shippingPayer === "merchant";
@@ -241,7 +247,7 @@ export async function createShipment(
           ${input.recipientName}, ${recipientPhone}, ${input.recipientPhoneAlt ?? null},
           ${gov.id}::uuid, ${input.areaId ?? null}::uuid, ${input.addressLine}, ${input.landmark ?? null},
           ${gov.zone_id}::uuid,
-          ${codAmountP.toString()}::bigint, ${paymentMethod}, ${shippingPayer}, ${isWalletOrder}, ${declaredValueP.toString()}::bigint,
+          ${storedCodP.toString()}::bigint, ${paymentMethod}, ${shippingPayer}, ${isWalletOrder}, ${declaredValueP.toString()}::bigint,
           ${input.piecesCount ?? 1}, ${allowedOpenPieces}, ${input.weightKg ?? null},
           ${input.isFragile ?? false}, ${input.fragileInsured ?? false},
           ${input.notesToCourier ?? null}, ${input.serviceType ?? "deliver"}, 'draft',
