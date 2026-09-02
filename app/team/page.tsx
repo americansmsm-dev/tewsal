@@ -38,6 +38,8 @@ export default function TeamPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [resetUser, setResetUser] = useState<TeamUser | null>(null);
   const canManage = user?.role === "super_admin" || user?.role === "branch_manager";
+  // إظهار الباسورد — لمدير النظام (super_admin) بس
+  const canSeePassword = user?.role === "super_admin";
 
   const load = useCallback(async () => {
     const r = await apiCall<{ users: TeamUser[] }>("GET", "/api/v1/users");
@@ -120,7 +122,7 @@ export default function TeamPage() {
                       <Td>
                         {u.role !== "super_admin" && (
                           <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-start" }}>
-                            <PasswordCell userId={u.id} />
+                            {canSeePassword && <PasswordCell userId={u.id} />}
                             <button className="btn btn-ghost" style={{ padding: "0.25rem 0.6rem", fontSize: "0.78rem" }} onClick={() => setResetUser(u)}>⚙️ إدارة الحساب</button>
                           </div>
                         )}
