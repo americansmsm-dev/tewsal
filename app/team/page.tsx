@@ -164,12 +164,12 @@ function ResetPasswordModal({ user, onClose, onDone }: { user: TeamUser; onClose
     // اسم الدخول
     if (usernameChanged) {
       const r = await apiCall("PATCH", `/api/v1/users/${user.id}`, { username: username.trim() });
-      if (!r.ok) { setBusy(false); setError(r.error?.message ?? "فشل تغيير اسم الدخول"); return; }
+      if (!r.ok) { setBusy(false); setError(`${r.error?.message ?? "فشل تغيير اسم الدخول"} (${r.status})`); return; }
     }
     // الباسورد
     if (pw) {
       const r = await apiCall("POST", `/api/v1/users/${user.id}/password`, { password: pw });
-      if (!r.ok) { setBusy(false); setError(r.error?.message ?? "فشل تغيير الباسورد"); return; }
+      if (!r.ok) { setBusy(false); setError(`${r.error?.message ?? "فشل تغيير الباسورد"} (${r.status})`); return; }
     }
     setBusy(false); setDone(true);
   }
