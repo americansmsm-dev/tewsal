@@ -17,6 +17,7 @@ const ITEMS: NavItem[] = [
   { href: "/", label: "الشحنات", roles: ["super_admin", "branch_manager", "ops", "accountant", "support"] },
   { href: "/pickups", label: "الاستلام", roles: ["super_admin", "branch_manager", "ops"] },
   { href: "/scan", label: "المسح", roles: ["super_admin", "branch_manager", "ops"] },
+  { href: "/receiving", label: "الوارد", roles: ["super_admin", "branch_manager", "ops"] },
   { href: "/runsheets", label: "الكشوف", roles: ["super_admin", "branch_manager", "ops", "accountant"] },
   { href: "/returns", label: "المرتجعات", roles: ["super_admin", "branch_manager", "ops", "accountant"] },
   { href: "/warehouse", label: "المخزن", roles: ["super_admin", "branch_manager", "ops"] },

@@ -118,10 +118,12 @@ export async function GET(req: NextRequest) {
       SELECT s.id, s.awb, s.status, s.recipient_name, s.recipient_phone,
              s.cod_amount_p::text, s.price_p::text, s.total_fees_p::text,
              s.address_line, s.landmark, s.current_courier_id,
-             s.created_at, g.name_ar AS governorate, m.name_ar AS merchant_name
+             s.created_at, g.name_ar AS governorate, m.name_ar AS merchant_name,
+             cu.full_name AS courier_name
       FROM shipments s
       JOIN governorates g ON g.id = s.governorate_id
       JOIN merchants m ON m.id = s.merchant_id
+      LEFT JOIN users cu ON cu.id = s.current_courier_id
       WHERE 1=1
         ${statuses.length ? sql`AND s.status IN (${sql.join(statuses.map((s) => sql`${s}`), sql`, `)})` : sql``}
         ${merchantId ? sql`AND s.merchant_id = ${merchantId}::uuid` : sql``}

@@ -16,7 +16,7 @@ import {
 
 /** الحالات اللي بيظهر معاها زر صورة الإثبات */
 const PHOTO_STATES = new Set<ShipmentStatus>([
-  "picked_up", "delivered", "partially_delivered", "delivery_failed", "damaged", "returned_to_merchant",
+  "picked_up", "at_hub", "delivered", "partially_delivered", "delivery_failed", "damaged", "returned_to_merchant",
 ]);
 /** الحالات اللي الصورة فيها إجبارية — تسليم للعميل + استلام من التاجر (أيًا كان عدد الأوردرات) */
 const PHOTO_REQUIRED = new Set<ShipmentStatus>([
