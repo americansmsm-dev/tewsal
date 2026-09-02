@@ -130,6 +130,11 @@ export function TransitionModal({
       setError("لازم تصوّر إثبات التسليم قبل ما تسلّم الأوردر 📷");
       return;
     }
+    // 🧑‍✈️ خطوات الإسناد لازم تختار مندوب — عشان الشغل ميروحش لحد
+    if (needsCourier && !courierId) {
+      setError("اختار المندوب الأول عشان الشحنة توصله");
+      return;
+    }
     setError(null);
     setBusy(true);
 
@@ -176,9 +181,14 @@ export function TransitionModal({
     }
   }
 
+  // كل خطوة بتسنّد شغل لمندوب لازم تعرض اختيار المندوب:
+  // استلام · تحميل للتوصيل (run_sheet) · تحميل المرتجع للتاجر (out_for_return)
   const needsCourier =
     !!chosen &&
-    (requires.includes("pickup") || requires.includes("run_sheet") || toStatus === "pickup_assigned");
+    (requires.includes("pickup") ||
+      requires.includes("run_sheet") ||
+      toStatus === "pickup_assigned" ||
+      toStatus === "out_for_return");
 
   return (
     <Overlay onClose={onClose}>
