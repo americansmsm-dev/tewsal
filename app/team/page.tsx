@@ -119,7 +119,10 @@ export default function TeamPage() {
                     {canManage && (
                       <Td>
                         {u.role !== "super_admin" && (
-                          <button className="btn btn-ghost" style={{ padding: "0.25rem 0.6rem", fontSize: "0.78rem" }} onClick={() => setResetUser(u)}>⚙️ إدارة الحساب</button>
+                          <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-start" }}>
+                            <PasswordCell userId={u.id} />
+                            <button className="btn btn-ghost" style={{ padding: "0.25rem 0.6rem", fontSize: "0.78rem" }} onClick={() => setResetUser(u)}>⚙️ إدارة الحساب</button>
+                          </div>
                         )}
                       </Td>
                     )}
@@ -143,6 +146,49 @@ export default function TeamPage() {
       {resetUser && (
         <ResetPasswordModal user={resetUser} onClose={() => setResetUser(null)} onDone={() => setResetUser(null)} />
       )}
+    </div>
+  );
+}
+
+/** باسورد قوي سهل القراءة (من غير حروف ملتبسة) */
+function genPassword(): string {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
+  const bytes = new Uint8Array(9);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => chars[b % chars.length]).join("");
+}
+
+/**
+ * إظهار باسورد جديد للأدمن/مدير الفرع — بيولّد باسورد جديد،
+ * يحطّه للحساب، ويعرضه فورًا. (مفيش تخزين للباسورد — بيتعرض
+ * ساعة ما يتعمل بس، وده الحل الآمن.)
+ */
+function PasswordCell({ userId }: { userId: string }) {
+  const [pw, setPw] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function generate() {
+    if (!window.confirm("هيتعمل باسورد جديد للحساب ده، والباسورد القديم مش هيشتغل. تمام؟")) return;
+    setBusy(true); setErr(null);
+    const np = genPassword();
+    const r = await apiCall("POST", `/api/v1/users/${userId}/password`, { password: np });
+    setBusy(false);
+    if (!r.ok) { setErr(r.error?.message ?? "فشل"); return; }
+    setPw(np);
+  }
+
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+      {pw ? (
+        <>
+          <span dir="ltr" style={{ fontFamily: "monospace", fontWeight: 800, fontSize: "0.85rem", color: "var(--color-orange-600)" }}>{pw}</span>
+          <button className="btn btn-ghost" style={{ padding: "0.12rem 0.4rem", fontSize: "0.72rem" }} onClick={() => setPw(null)} title="إخفاء">🙈</button>
+        </>
+      ) : (
+        <button className="btn btn-ghost" style={{ padding: "0.2rem 0.55rem", fontSize: "0.75rem" }} disabled={busy} onClick={generate}>{busy ? "..." : "🔑 باسورد جديد"}</button>
+      )}
+      {err && <span style={{ fontSize: "0.7rem", color: "var(--muted)" }}>{err}</span>}
     </div>
   );
 }
