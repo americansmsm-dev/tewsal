@@ -62,7 +62,7 @@ export default function CourierApp() {
 
   const load = useCallback(async () => {
     const [t, s, a, w] = await Promise.all([
-      apiCall<{ shipments: Task[] }>("GET", "/api/v1/shipments?status=pickup_assigned,out_for_delivery,out_for_return&limit=100"),
+      apiCall<{ shipments: Task[] }>("GET", "/api/v1/shipments?status=pickup_assigned,picked_up,out_for_delivery,out_for_return&limit=100"),
       apiCall<Summary>("GET", "/api/v1/courier/summary"),
       apiCall<{ checkedIn: boolean; checkedOut: boolean }>("GET", "/api/v1/courier/field"),
       apiCall<WorkHours>("GET", "/api/v1/settings/work-hours"),
@@ -252,10 +252,12 @@ function Stat({ icon, label, value, tone }: { icon: string; label: string; value
 
 // ─────────────────────────── مهامي ───────────────────────────
 /** نوع المهمة حسب الحالة — استلام من التاجر / توصيل للعميل / إرجاع للتاجر */
-interface TaskKind { badge: string; tone: string; btn: string; toMerchant: boolean }
+interface TaskKind { badge: string; tone: string; btn: string; toMerchant: boolean; note?: string }
 const DELIVERY_KIND: TaskKind = { badge: "🛵 توصيل للعميل", tone: "#16a34a", btn: "تسليم / تعذّر", toMerchant: false };
 const TASK_KIND: Record<string, TaskKind> = {
   pickup_assigned: { badge: "📦 استلام من التاجر", tone: "#2563eb", btn: "تأكيد الاستلام", toMerchant: true },
+  // بعد الاستلام من التاجر بتفضل في عهدة المندوب لحد ما مسؤول المخزن يستلمها (مفيش زرار — المخزن بيعمل الاستلام)
+  picked_up: { badge: "📥 معايا — سلّمها للمخزن", tone: "#7c3aed", btn: "", toMerchant: true, note: "في عهدتك — سلّمها لمسؤول المخزن وهو هيستلمها على السيستم" },
   out_for_return: { badge: "↩️ إرجاع للتاجر", tone: "#d97706", btn: "تأكيد الإرجاع", toMerchant: true },
   out_for_delivery: DELIVERY_KIND,
 };
@@ -297,14 +299,20 @@ function TasksTab({ tasks, loading, onPick, onDetail }: { tasks: Task[]; loading
                     <div style={{ fontSize: "2rem", fontWeight: 800, color: "var(--color-orange-600)" }}>{egp(t.cod_amount_p)} <span style={{ fontSize: "1rem" }}>ج</span></div>
                   </div>
                 )}
-                <div style={{ display: "flex", gap: 8, marginTop: "0.8rem" }}>
-                  {!k.toMerchant && <>
-                    <a href={`tel:${t.recipient_phone}`} className="btn btn-ghost" style={{ flex: "0 0 auto", padding: "0.6rem 0.8rem" }}>📞</a>
-                    <a href={`https://wa.me/2${t.recipient_phone}`} target="_blank" rel="noopener noreferrer" className="btn btn-ghost" style={{ flex: "0 0 auto", padding: "0.6rem 0.8rem" }}>💬</a>
-                    <a href={`https://maps.google.com/?q=${encodeURIComponent(t.governorate + " " + t.address_line)}`} target="_blank" rel="noopener noreferrer" className="btn btn-ghost" style={{ flex: "0 0 auto", padding: "0.6rem 0.8rem" }}>🗺️</a>
-                  </>}
-                  <button className="btn btn-primary" style={{ flex: 1, padding: "0.7rem" }} onClick={() => onPick(t)}>{k.btn}</button>
-                </div>
+                {k.note ? (
+                  <div style={{ marginTop: "0.8rem", padding: "0.6rem 0.8rem", background: "var(--bg-soft)", borderRadius: 10, fontSize: "0.8rem", color: "var(--muted)", textAlign: "center" }}>
+                    ⏳ {k.note}
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", gap: 8, marginTop: "0.8rem" }}>
+                    {!k.toMerchant && <>
+                      <a href={`tel:${t.recipient_phone}`} className="btn btn-ghost" style={{ flex: "0 0 auto", padding: "0.6rem 0.8rem" }}>📞</a>
+                      <a href={`https://wa.me/2${t.recipient_phone}`} target="_blank" rel="noopener noreferrer" className="btn btn-ghost" style={{ flex: "0 0 auto", padding: "0.6rem 0.8rem" }}>💬</a>
+                      <a href={`https://maps.google.com/?q=${encodeURIComponent(t.governorate + " " + t.address_line)}`} target="_blank" rel="noopener noreferrer" className="btn btn-ghost" style={{ flex: "0 0 auto", padding: "0.6rem 0.8rem" }}>🗺️</a>
+                    </>}
+                    <button className="btn btn-primary" style={{ flex: 1, padding: "0.7rem" }} onClick={() => onPick(t)}>{k.btn}</button>
+                  </div>
+                )}
               </div>
             );
           })}

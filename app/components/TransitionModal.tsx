@@ -16,7 +16,11 @@ import {
 
 /** الحالات اللي بيظهر معاها زر صورة الإثبات */
 const PHOTO_STATES = new Set<ShipmentStatus>([
-  "delivered", "partially_delivered", "delivery_failed", "damaged", "returned_to_merchant",
+  "picked_up", "delivered", "partially_delivered", "delivery_failed", "damaged", "returned_to_merchant",
+]);
+/** الحالات اللي الصورة فيها إجبارية — تسليم للعميل + استلام من التاجر (أيًا كان عدد الأوردرات) */
+const PHOTO_REQUIRED = new Set<ShipmentStatus>([
+  "picked_up", "delivered", "partially_delivered",
 ]);
 
 interface Courier {
@@ -121,13 +125,14 @@ export function TransitionModal({
     });
   }, [shipmentId]);
 
-  const isDelivery = toStatus === "delivered" || toStatus === "partially_delivered";
+  const isPickup = toStatus === "picked_up";
+  const photoRequired = !!toStatus && PHOTO_REQUIRED.has(toStatus as ShipmentStatus);
 
   async function submit() {
     if (!toStatus) return;
-    // 📷 صورة إثبات التسليم إجبارية — المندوب مايسلّمش من غير صورة
-    if (isDelivery && !photoKey) {
-      setError("لازم تصوّر إثبات التسليم قبل ما تسلّم الأوردر 📷");
+    // 📷 الصورة إجبارية: تصوير الأوردر عند الاستلام من التاجر وعند التسليم للعميل
+    if (photoRequired && !photoKey) {
+      setError(isPickup ? "لازم تصوّر الأوردر قبل ما تأكّد الاستلام 📷" : "لازم تصوّر إثبات التسليم قبل ما تسلّم الأوردر 📷");
       return;
     }
     // 🧑‍✈️ خطوات الإسناد لازم تختار مندوب — عشان الشغل ميروحش لحد
@@ -329,7 +334,7 @@ export function TransitionModal({
 
       {showPhoto && (
         <div style={{ marginBottom: "0.9rem" }}>
-          <label className="label">صورة إثبات {isDelivery || requires.includes("signature") ? "(إجباري)" : "(اختياري)"}</label>
+          <label className="label">{isPickup ? "صورة الأوردر" : "صورة إثبات"} {photoRequired || requires.includes("signature") ? "(إجباري)" : "(اختياري)"}</label>
           <input
             ref={fileRef}
             type="file"
@@ -355,7 +360,7 @@ export function TransitionModal({
               {photoBusy ? "جاري الرفع..." : "📷 التقاط صورة"}
             </button>
           )}
-          {photoErr && <div style={{ marginTop: 6, fontSize: "0.78rem", color: "var(--muted)" }}>⚠️ {photoErr}{isDelivery ? " — لازم تعيد المحاولة، الصورة إجبارية" : " — تقدر تكمّل من غير صورة"}</div>}
+          {photoErr && <div style={{ marginTop: 6, fontSize: "0.78rem", color: "var(--muted)" }}>⚠️ {photoErr}{photoRequired ? " — لازم تعيد المحاولة، الصورة إجبارية" : " — تقدر تكمّل من غير صورة"}</div>}
         </div>
       )}
 
