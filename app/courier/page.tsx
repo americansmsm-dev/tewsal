@@ -63,7 +63,7 @@ export default function CourierApp() {
 
   const load = useCallback(async () => {
     const [t, s, a, w] = await Promise.all([
-      apiCall<{ shipments: Task[] }>("GET", "/api/v1/shipments?status=pickup_assigned,picked_up,out_for_delivery,out_for_return&limit=100"),
+      apiCall<{ shipments: Task[] }>("GET", "/api/v1/shipments?status=pickup_assigned,picked_up,out_for_delivery,awaiting_return,out_for_return&limit=100"),
       apiCall<Summary>("GET", "/api/v1/courier/summary"),
       apiCall<{ checkedIn: boolean; checkedOut: boolean }>("GET", "/api/v1/courier/field"),
       apiCall<WorkHours>("GET", "/api/v1/settings/work-hours"),
@@ -269,6 +269,8 @@ const TASK_KIND: Record<string, TaskKind> = {
   pickup_assigned: { badge: "📦 استلام من التاجر", tone: "#2563eb", btn: "تأكيد الاستلام", toMerchant: true },
   // بعد الاستلام من التاجر بتفضل في عهدة المندوب لحد ما مسؤول المخزن يستلمها (مفيش زرار — المخزن بيعمل الاستلام)
   picked_up: { badge: "📥 معايا — سلّمها للمخزن", tone: "#7c3aed", btn: "", toMerchant: true, note: "في عهدتك — سلّمها لمسؤول المخزن وهو هيستلمها على السيستم" },
+  // مرتجع رجع مع المندوب — يفضل في عهدته لحد ما المخزن يستلمه (مفيش زرار)
+  awaiting_return: { badge: "↩️ مرتجع معايا — سلّمه للمخزن", tone: "#dc2626", btn: "", toMerchant: true, note: "مرتجع في عهدتك — سلّمه لمسؤول المخزن وهو هيستلمه على السيستم" },
   out_for_return: { badge: "↩️ إرجاع للتاجر", tone: "#d97706", btn: "تأكيد الإرجاع", toMerchant: true },
   out_for_delivery: DELIVERY_KIND,
 };
