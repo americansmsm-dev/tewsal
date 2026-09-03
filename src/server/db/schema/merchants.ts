@@ -42,6 +42,8 @@ export const merchants = pgTable(
     /** مين بيتحمّل الشحن افتراضيًا: merchant · customer */
     defaultShippingPayer: text("default_shipping_payer").notNull().default("merchant"),
     isActive: boolean("is_active").notNull().default(true),
+    /** عنوان الاستلام المحفوظ — التاجر بيكتبه مرة ويقدر يعدّله */
+    pickupAddress: text("pickup_address"),
     notes: text("notes"),
     // --- CRM (مرحلة ج) ---
     /** موظف المبيعات المسؤول */

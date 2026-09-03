@@ -347,19 +347,46 @@ function ReturnsTab({ rows, onDetail }: { rows: ShipmentRow[]; onDetail: (id: st
 // ─────────────────────────── بياناتي + طلب استلام ───────────────────────────
 function ProfileTab({ me, rows, onDone, logout }: { me: Me; rows: ShipmentRow[]; onDone: () => void; logout: () => void }) {
   const awaiting = rows.filter((r) => r.status === "awaiting_pickup");
-  const [addr, setAddr] = useState("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+  // عنوان الاستلام المحفوظ — بيتكتب مرة واحدة وبيتعدّل بعد كده
+  const [savedAddr, setSavedAddr] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [addrBusy, setAddrBusy] = useState(false);
+  const [addrErr, setAddrErr] = useState<string | null>(null);
+  const [loadedAddr, setLoadedAddr] = useState(false);
+
+  useEffect(() => {
+    apiCall<{ merchant: { pickup_address: string | null } }>("GET", "/api/v1/merchants/me").then((r) => {
+      if (r.ok && r.data) {
+        const a = r.data.merchant.pickup_address;
+        setSavedAddr(a);
+        setDraft(a ?? "");
+        if (!a) setEditing(true); // أول مرة — بيكتبه
+      }
+      setLoadedAddr(true);
+    });
+  }, []);
+
+  async function saveAddress() {
+    if (draft.trim().length < 5) { setAddrErr("العنوان لازم ٥ حروف على الأقل"); return; }
+    setAddrBusy(true); setAddrErr(null);
+    const r = await apiCall<{ pickupAddress: string }>("PATCH", "/api/v1/merchants/me", { pickupAddress: draft.trim() });
+    setAddrBusy(false);
+    if (r.ok && r.data) { setSavedAddr(r.data.pickupAddress); setEditing(false); }
+    else setAddrErr(r.error?.message ?? "فشل الحفظ");
+  }
 
   async function requestPickup() {
     if (!me.merchantId || awaiting.length === 0) return;
-    if (addr.trim().length < 3) { setMsg({ kind: "err", text: "اكتب عنوان الاستلام" }); return; }
+    if (!savedAddr) { setMsg({ kind: "err", text: "احفظ عنوان الاستلام الأول" }); return; }
     setBusy(true); setMsg(null);
     const r = await apiCall<{ code: string; serviceFee: string }>("POST", "/api/v1/pickups", {
-      merchantId: me.merchantId, shipmentIds: awaiting.map((s) => s.id), pickupAddress: addr,
+      merchantId: me.merchantId, shipmentIds: awaiting.map((s) => s.id), pickupAddress: savedAddr,
     });
     setBusy(false);
-    if (r.ok && r.data) { setMsg({ kind: "ok", text: `تم طلب الاستلام (${r.data.code}) — الرسم ${r.data.serviceFee}` }); setAddr(""); onDone(); }
+    if (r.ok && r.data) { setMsg({ kind: "ok", text: `تم طلب الاستلام (${r.data.code}) — الرسم ${r.data.serviceFee}` }); onDone(); }
     else setMsg({ kind: "err", text: r.error?.message ?? "فشل الطلب" });
   }
 
@@ -367,18 +394,50 @@ function ProfileTab({ me, rows, onDone, logout }: { me: Me; rows: ShipmentRow[];
     <div style={{ display: "grid", gap: 14 }}>
       <h2 style={{ margin: 0, fontSize: "1.05rem" }}>بياناتي</h2>
 
+      {/* عنوان الاستلام المحفوظ — مرة واحدة وممكن تعدّله */}
+      <div className="card" style={{ padding: "1rem 1.2rem" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 6 }}>
+          <div style={{ fontWeight: 800 }}>📍 عنوان الاستلام</div>
+          {savedAddr && !editing && (
+            <button className="btn btn-ghost" style={{ padding: "0.25rem 0.7rem", fontSize: "0.78rem" }} onClick={() => { setDraft(savedAddr); setEditing(true); }}>✏️ تعديل</button>
+          )}
+        </div>
+        {!loadedAddr ? (
+          <div style={{ fontSize: "0.85rem", color: "var(--muted)" }}>جاري التحميل...</div>
+        ) : editing ? (
+          <>
+            <div style={{ fontSize: "0.8rem", color: "var(--muted)", marginBottom: 6 }}>
+              اكتب عنوانك مرة واحدة — هيتحفظ ونستخدمه في كل طلب استلام.
+            </div>
+            <input className="input" placeholder="مثال: ٥ شارع جامعة الدول، المهندسين، الجيزة" value={draft}
+              onChange={(e) => setDraft(e.target.value)} style={{ width: "100%", marginBottom: 8 }} />
+            <div style={{ display: "flex", gap: 8 }}>
+              <button className="btn btn-primary" onClick={saveAddress} disabled={addrBusy} style={{ flex: 1 }}>
+                {addrBusy ? "..." : "احفظ العنوان"}
+              </button>
+              {savedAddr && <button className="btn btn-ghost" onClick={() => { setEditing(false); setAddrErr(null); }}>إلغاء</button>}
+            </div>
+            {addrErr && <div style={{ marginTop: 8, fontSize: "0.82rem", fontWeight: 700, color: "var(--color-danger)" }}>{addrErr}</div>}
+          </>
+        ) : (
+          <div style={{ fontSize: "0.9rem", fontWeight: 600 }}>{savedAddr}</div>
+        )}
+      </div>
+
       {/* طلب استلام */}
       <div className="card" style={{ padding: "1rem 1.2rem" }}>
         <div style={{ fontWeight: 800, marginBottom: 6 }}>🚚 طلب استلام</div>
         {awaiting.length === 0 ? (
           <div style={{ fontSize: "0.85rem", color: "var(--muted)" }}>مفيش شحنات في انتظار الاستلام دلوقتي.</div>
+        ) : !savedAddr ? (
+          <div style={{ fontSize: "0.85rem", color: "var(--muted)" }}>احفظ عنوان الاستلام فوق الأول عشان تقدر تطلب.</div>
         ) : (
           <>
             <div style={{ fontSize: "0.85rem", color: "var(--muted)", marginBottom: 8 }}>
               عندك <b>{toArabicDigits(awaiting.length)}</b> شحنة في انتظار الاستلام.
               {awaiting.length < 5 && <span> (أقل من ٥ عليها رسم خدمة ٥٠ج)</span>}
             </div>
-            <input className="input" placeholder="عنوان الاستلام" value={addr} onChange={(e) => setAddr(e.target.value)} style={{ width: "100%", marginBottom: 8 }} />
+            <div style={{ fontSize: "0.8rem", color: "var(--muted)", marginBottom: 8 }}>هيتم الاستلام من: <b>{savedAddr}</b></div>
             <button className="btn btn-primary" onClick={requestPickup} disabled={busy} style={{ width: "100%" }}>
               {busy ? "..." : "اطلب استلام"}
             </button>
