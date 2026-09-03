@@ -36,6 +36,8 @@ interface ShipmentRow {
   governorate: string;
   created_at: string;
   current_courier_id?: string | null;
+  merchant_name?: string;
+  courier_name?: string;
 }
 
 const STATUS_FILTERS: (ShipmentStatus | "")[] = [
@@ -159,6 +161,7 @@ export default function Dashboard() {
             <thead>
               <tr style={{ background: "var(--bg-soft)", textAlign: "right" }}>
                 <Th>البوليصة</Th>
+                <Th>البيدج</Th>
                 <Th>المستلم</Th>
                 <Th>المحافظة</Th>
                 <Th>التحصيل</Th>
@@ -169,13 +172,13 @@ export default function Dashboard() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={6} style={{ padding: "2rem", textAlign: "center", color: "var(--muted)" }}>
+                  <td colSpan={7} style={{ padding: "2rem", textAlign: "center", color: "var(--muted)" }}>
                     جاري التحميل...
                   </td>
                 </tr>
               ) : rows.length === 0 ? (
                 <tr>
-                  <td colSpan={6} style={{ padding: "2.5rem", textAlign: "center", color: "var(--muted)" }}>
+                  <td colSpan={7} style={{ padding: "2.5rem", textAlign: "center", color: "var(--muted)" }}>
                     مفيش شحنات {filter ? "في الحالة دي" : "لسه"} — ابدأ بإنشاء شحنة جديدة
                   </td>
                 </tr>
@@ -189,6 +192,12 @@ export default function Dashboard() {
                         <span dir="ltr" style={{ fontWeight: 700, letterSpacing: "0.03em" }}>
                           {s.awb}
                         </span>
+                      </Td>
+                      <Td>
+                        <div style={{ fontWeight: 700 }}>{s.merchant_name ?? "—"}</div>
+                        {s.courier_name ? (
+                          <div style={{ color: "var(--muted)", fontSize: "0.75rem" }}>مندوب: {s.courier_name}</div>
+                        ) : null}
                       </Td>
                       <Td>
                         <div>{s.recipient_name}</div>

@@ -301,6 +301,10 @@ function TasksTab({ tasks, loading, onPick, onDetail }: { tasks: Task[]; loading
                 <div onClick={() => onDetail(t)} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8, cursor: "pointer" }}>
                   <div>
                     <div style={{ fontWeight: 800, fontSize: "1.05rem" }}>{title} <span style={{ fontSize: "0.75rem", color: "var(--color-orange-600)", fontWeight: 700 }}>ℹ️ تفاصيل</span></div>
+                    {/* اسم البيدج (التاجر) يبان على كل كارت — حتى في التوصيل للعميل */}
+                    {!k.toMerchant && t.merchant_name && (
+                      <div style={{ fontSize: "0.8rem", fontWeight: 700, color: "var(--color-orange-600)" }}>📄 {t.merchant_name}</div>
+                    )}
                     <div style={{ fontSize: "0.85rem", color: "var(--muted)" }}>{t.governorate}{!k.toMerchant && ` · ${t.address_line}`}</div>
                     {!k.toMerchant && t.landmark && <div style={{ fontSize: "0.78rem", color: "var(--muted)" }}>📍 {t.landmark}</div>}
                   </div>
