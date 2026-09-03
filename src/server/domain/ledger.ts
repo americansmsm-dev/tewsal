@@ -698,6 +698,31 @@ export function buildMerchantChargeEntry(i: {
   });
 }
 
+/**
+ * تصحيح رسوم تحصيل اتخصمت على الأوردر تحت القاعدة القديمة (رسم لكل أوردر).
+ * بترجّعها لمستحقات التاجر، لأنها بقت بتتحسب **مرة واحدة على إجمالي
+ * الفاتورة**. الدفتر إضافة-فقط — فده **قيد تصحيح** مش حذف.
+ * مدين إيراد التحصيل / دائن مستحقات التاجر.
+ */
+export function buildCodFeeAdjustmentEntry(i: {
+  shipmentId: string;
+  merchantId: string;
+  amountP: Piastres;
+  memo: string;
+}): DraftEntry {
+  if (i.amountP <= 0n) throw new Error("مبلغ صفر مبيعملش قيد");
+  return entry({
+    descriptionAr: i.memo,
+    sourceType: "shipment",
+    sourceId: i.shipmentId,
+    kind: "cod_fee_adjustment",
+    lines: [
+      { account: ACC.revenueCodFee(), debitP: i.amountP, creditP: 0n, memo: i.memo, merchantId: i.merchantId, shipmentId: i.shipmentId },
+      { account: ACC.merchantPayable(i.merchantId), debitP: 0n, creditP: i.amountP, memo: i.memo, merchantId: i.merchantId, shipmentId: i.shipmentId },
+    ],
+  });
+}
+
 // ---------------------------------------------------------------
 // ٩) مصروف تشغيلي (بند مصروفات / أسطول)
 // ---------------------------------------------------------------
