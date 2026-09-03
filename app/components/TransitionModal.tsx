@@ -62,7 +62,10 @@ export function TransitionModal({
   onClose: () => void;
   onDone: () => void;
 }) {
-  const options = allowedTransitions(currentStatus, role);
+  // ⚠️ إسناد الاستلام مش من هنا — بيتعمل من «الاستلام الجماعي» عشان
+  //    أوردرات التاجر تتجمّع في استلام حقيقي واحد على مندوب واحد.
+  //    (قبل كده كان بيتولّد مرجع استلام وهمي لكل أوردر — مجموعة مفكّكة.)
+  const options = allowedTransitions(currentStatus, role).filter((o) => o.to !== "pickup_assigned");
   const [toStatus, setToStatus] = useState<ShipmentStatus | "">("");
   const [couriers, setCouriers] = useState<Courier[]>([]);
   const [reasons, setReasons] = useState<ReasonCode[]>([]);
@@ -166,8 +169,8 @@ export function TransitionModal({
     }
     if (note) body.note = note;
     if (receiverName) body.receiverName = receiverName;
-    // متطلبات الإسناد/التحميل — بنولّد مرجع مؤقت للبيك أب/الكشف
-    if (requires.includes("pickup")) body.pickupId = crypto.randomUUID();
+    // إسناد الاستلام اتشال من هنا (بيتعمل من «الاستلام الجماعي» باستلام حقيقي).
+    // TODO: كشف التوصيل لسه بيولّد مرجع مؤقت — يتنقل لنفس النمط عبر /run-sheets.
     if (requires.includes("run_sheet")) body.runSheetId = crypto.randomUUID();
     if (courierId) {
       body.courierId = courierId;

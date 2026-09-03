@@ -8,7 +8,7 @@ import { sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/server/db";
 import { formatEGP } from "@/lib/money";
-import { createPickup } from "@/server/services/pickup";
+import { createPickup, assignPickup } from "@/server/services/pickup";
 import { requireRole, requireUser } from "@/server/http/context";
 import { ok, fail, handleError } from "@/server/http/respond";
 
@@ -24,7 +24,12 @@ const createSchema = z.object({
   scheduledDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
   timeWindow: z.enum(["morning", "evening"]).nullable().optional(),
   notes: z.string().max(1000).nullable().optional(),
+  /** اختياري: يسند الاستلام لمندوب في **نفس** العملية (استلام جماعي بضغطة) */
+  courierId: z.string().uuid().optional(),
 });
+
+/** مين له حق يسند مندوب (التاجر لأ) */
+const ASSIGNERS: readonly string[] = ["super_admin", "branch_manager", "ops"];
 
 function pickupCode(seq: string): string {
   const year = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo", year: "numeric" }).format(new Date());
@@ -38,10 +43,25 @@ export async function POST(req: NextRequest) {
     const parsed = createSchema.safeParse(raw);
     if (!parsed.success) return fail("BAD_REQUEST", parsed.error.issues[0]?.message ?? "بيانات ناقصة", 400);
 
+    const courierId = parsed.data.courierId;
+    // التاجر ميسندش مندوب لنفسه
+    if (courierId && !ASSIGNERS.includes(ctx.user.role)) {
+      return fail("FORBIDDEN", "مش من صلاحيتك تسند مندوب", 403);
+    }
+
+    // الإنشاء + الإسناد في **ترانزاكشن واحدة** — لو الإسناد فشل، الاستلام نفسه
+    // مايتعملش، فمايبقاش عندنا استلام معلّق من غير مندوب.
     const result = await db.transaction(async (tx) => {
       const seqR = await tx.execute(sql`SELECT nextval('awb_sequence')::text AS n`);
       const n = (Array.isArray(seqR) ? seqR : (seqR as { rows: { n: string }[] }).rows)[0] as { n: string };
-      return createPickup(tx, { ...parsed.data, code: pickupCode(n.n), actorUserId: ctx.user.userId });
+      const created = await createPickup(tx, { ...parsed.data, code: pickupCode(n.n), actorUserId: ctx.user.userId });
+      if (!courierId) return { ...created, assigned: 0, courierId: null as string | null };
+      const a = await assignPickup(tx, {
+        pickupId: created.pickupId,
+        courierId,
+        actor: { userId: ctx.user.userId, role: ctx.user.role, name: ctx.user.fullName },
+      });
+      return { ...created, status: a.status, assigned: a.assigned, courierId };
     });
 
     return ok(
@@ -52,6 +72,8 @@ export async function POST(req: NextRequest) {
         serviceFee: formatEGP(result.serviceFeeP),
         serviceFeeP: result.serviceFeeP.toString(),
         status: result.status,
+        assigned: result.assigned,
+        courierId: result.courierId,
       },
       201
     );

@@ -14,6 +14,7 @@ import { useDebounce } from "./lib/useDebounce";
 import { CreateShipmentModal } from "./components/CreateShipmentModal";
 import { TransitionModal } from "./components/TransitionModal";
 import { ShipmentDetailsModal } from "./components/ShipmentDetailsModal";
+import { BulkPickupModal } from "./components/BulkPickupModal";
 import {
   apiCall,
   STATUS_LABELS_AR,
@@ -68,22 +69,35 @@ export default function Dashboard() {
   const [showCreate, setShowCreate] = useState(false);
   const [active, setActive] = useState<ShipmentRow | null>(null);
   const [details, setDetails] = useState<ShipmentRow | null>(null);
+  // فلتر التاجر + الاستلام الجماعي
+  const [merchantId, setMerchantId] = useState("");
+  const [merchantList, setMerchantList] = useState<{ id: string; name_ar: string; code: string }[]>([]);
+  const [showBulk, setShowBulk] = useState(false);
+  const [bulkMsg, setBulkMsg] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const params = new URLSearchParams();
     if (filter) params.set("status", filter);
     if (dq) params.set("q", dq);
+    if (merchantId) params.set("merchantId", merchantId);
     const r = await apiCall<{ shipments: ShipmentRow[] }>(
       "GET",
       `/api/v1/shipments?${params.toString()}`
     );
     if (r.ok) setRows(r.data?.shipments ?? []);
     setLoading(false);
-  }, [filter, dq]);
+  }, [filter, dq, merchantId]);
 
   useEffect(() => {
     if (user) load();
   }, [user, load]);
+
+  // قائمة التجار للفلتر (للإدارة والعمليات بس)
+  useEffect(() => {
+    if (!user || !["super_admin", "branch_manager", "ops"].includes(user.role)) return;
+    apiCall<{ merchants: { id: string; name_ar: string; code: string }[] }>("GET", "/api/v1/merchants?limit=200")
+      .then((r) => { if (r.ok && r.data) setMerchantList(r.data.merchants); });
+  }, [user]);
 
   if (!user) {
     return (
@@ -135,6 +149,28 @@ export default function Dashboard() {
             </button>
           )}
         </div>
+
+        {/* فلتر التاجر + الاستلام الجماعي */}
+        {["super_admin", "branch_manager", "ops"].includes(user.role) && (
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: "0.8rem" }}>
+            <select className="input" value={merchantId} onChange={(e) => setMerchantId(e.target.value)}
+              style={{ maxWidth: 280, flex: "1 1 200px" }}>
+              <option value="">كل التجار</option>
+              {merchantList.map((m) => <option key={m.id} value={m.id}>{m.name_ar} ({m.code})</option>)}
+            </select>
+            <button className="btn btn-primary" onClick={() => setShowBulk(true)}>🚚 استلام جماعي</button>
+            {merchantId && filter === "awaiting_pickup" && rows.length > 0 && (
+              <span style={{ fontSize: "0.8rem", color: "var(--muted)" }}>
+                عند التاجر ده {toArabicDigits(rows.length)} أوردر مستني — جمّعهم على مندوب واحد بضغطة.
+              </span>
+            )}
+          </div>
+        )}
+        {bulkMsg && (
+          <div onClick={() => setBulkMsg(null)} style={{ marginBottom: "0.9rem", padding: "0.7rem 0.9rem", borderRadius: 12, background: "#16a34a18", border: "1px solid #16a34a33", color: "var(--color-success)", fontWeight: 700, fontSize: "0.85rem", cursor: "pointer" }}>
+            ✅ {bulkMsg}
+          </div>
+        )}
 
         {/* فلاتر الحالة */}
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: "1rem" }}>
@@ -262,6 +298,14 @@ export default function Dashboard() {
           {toArabicDigits(rows.length)} شحنة معروضة
         </p>
       </main>
+
+      {showBulk && (
+        <BulkPickupModal
+          initialMerchantId={merchantId || null}
+          onClose={() => setShowBulk(false)}
+          onDone={(m) => { setShowBulk(false); setBulkMsg(m); load(); }}
+        />
+      )}
 
       {showCreate && (
         <CreateShipmentModal

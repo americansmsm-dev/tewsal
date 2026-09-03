@@ -5,6 +5,7 @@
  * إسناد لمندوب + تأكيد. أقل من ٥ أوردرات بيتزاد عليها ٥٠ ج.
  */
 import { useCallback, useEffect, useState } from "react";
+import { BulkPickupModal } from "../components/BulkPickupModal";
 import { AppHeader } from "../components/AppHeader";
 import { AppNav } from "../components/AppNav";
 import { Overlay, ErrorBox } from "../components/TransitionModal";
@@ -80,7 +81,7 @@ export default function PickupsPage() {
       <main style={{ maxWidth: 1050, margin: "0 auto", padding: "1.25rem" }}>
         <div style={{ display: "flex", alignItems: "center", marginBottom: "1rem" }}>
           <h2 style={{ margin: 0, fontSize: "1.15rem", marginInlineEnd: "auto" }}>الاستلام من التجار</h2>
-          {canCreate && <button className="btn btn-primary" onClick={() => setShowCreate(true)}>+ طلب استلام</button>}
+          {canCreate && <button className="btn btn-primary" onClick={() => setShowCreate(true)}>🚚 استلام جماعي</button>}
         </div>
 
         {msg && (
@@ -127,7 +128,12 @@ export default function PickupsPage() {
         </div>
       </main>
 
-      {showCreate && <CreatePickupModal onClose={() => setShowCreate(false)} onDone={() => { setShowCreate(false); load(); }} />}
+      {showCreate && (
+        <BulkPickupModal
+          onClose={() => setShowCreate(false)}
+          onDone={(m) => { setShowCreate(false); setMsg(m); load(); }}
+        />
+      )}
       {assignFor && <AssignModal pickup={assignFor} onClose={() => setAssignFor(null)} onDone={() => { setAssignFor(null); load(); }} />}
     </div>
   );

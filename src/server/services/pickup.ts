@@ -149,6 +149,13 @@ export async function assignPickup(
     throw new HttpError(422, "BAD_STATUS", "الطلب مش في حالة تسمح بالإسناد");
   }
 
+  // المندوب لازم يكون موجود ومفعّل وبدور مندوب (نفس فحص createRunSheet)
+  const courier = rowsOf<{ role: string }>(
+    await ex.execute(sql`SELECT role FROM users WHERE id = ${input.courierId}::uuid AND is_active = true LIMIT 1`)
+  )[0];
+  if (!courier) throw new HttpError(422, "COURIER_MISSING", "المندوب مش موجود أو غير مفعّل");
+  if (courier.role !== "courier") throw new HttpError(422, "NOT_COURIER", "لازم يكون مندوب");
+
   const shipmentIds = rowsOf<{ shipment_id: string }>(
     await ex.execute(sql`SELECT shipment_id::text FROM pickup_shipments WHERE pickup_id = ${input.pickupId}::uuid`)
   ).map((r) => r.shipment_id);
