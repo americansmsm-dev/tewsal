@@ -84,11 +84,18 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const feesP = BigInt((s.total_fees_p as string) || "0");
     // صافي التاجر المعتمد وقت الإنشاء (= التحصيل − إجمالي الرسوم)
     const netP = BigInt((s.merchant_net_p as string) || (codP - feesP).toString());
+    // تفصيل سعر الأوردر: لو الشحن على العميل فالتحصيل شامل الشحن أصلًا
+    const customerPaysShipping = s.shipping_payer === "customer";
+    const goodsP = customerPaysShipping ? codP - priceP : codP; // البضاعة من غير شحن
+    const withShippingP = goodsP + priceP;                       // البضاعة + الشحن
     return ok({
       shipment: {
         ...s,
         codAmount: formatEGP(codP),
         priceAmount: formatEGP(priceP),
+        goodsAmount: formatEGP(goodsP > 0n ? goodsP : 0n),
+        withShippingAmount: formatEGP(withShippingP > 0n ? withShippingP : priceP),
+        customerPaysShipping,
         feesAmount: formatEGP(feesP),
         // صافي التاجر = التحصيل − إجمالي الرسوم (الرسوم شاملة الشحن)
         netAmount: formatEGP(netP),

@@ -17,7 +17,7 @@ export interface Step {
   occurred_at: string; source: string | null;
 }
 export interface Detail {
-  shipment: Record<string, unknown> & { codAmount: string; priceAmount: string; feesAmount: string; netAmount: string };
+  shipment: Record<string, unknown> & { codAmount: string; priceAmount: string; feesAmount: string; netAmount: string; goodsAmount: string; withShippingAmount: string; customerPaysShipping: boolean };
   items: { id: string; nameAr: string; sku: string | null; qty: number; price: string; status: string }[];
   history: Step[];
 }
@@ -81,7 +81,9 @@ export function OrderFullDetails({ shipmentId, showHeader = true }: { shipmentId
 
       {/* الفلوس */}
       <Section title="💰 الفلوس" />
-      <Row label="سعر الشحن" value={s.priceAmount} />
+      <Row label="🛍️ سعر الأوردر (من غير شحن)" value={s.goodsAmount} />
+      <Row label="🚚 الشحن لوحده" value={s.priceAmount} />
+      <Row label="🧾 الإجمالي بالشحن" value={s.withShippingAmount} />
       <Row label="إجمالي الرسوم (شامل الشحن)" value={s.feesAmount} />
       <Row label="💵 صافي التاجر (بعد خصم الرسوم)" value={s.netAmount} />
       <Row label="الشحن على مين" value={PAYER_AR[str("shipping_payer") ?? ""] ?? (str("shipping_payer") ?? "—")} />
@@ -90,7 +92,8 @@ export function OrderFullDetails({ shipmentId, showHeader = true }: { shipmentId
 
       {/* التاجر */}
       <Section title="🏪 التاجر" />
-      <Row label="الاسم" value={(str("merchant_name") ?? "—") + (str("merchant_code") ? ` (${str("merchant_code")})` : "")} />
+      <Row label="📄 اسم البيدج" value={str("merchant_name") ?? "—"} />
+      {str("merchant_code") ? <Row label="كود التاجر" value={str("merchant_code")} /> : null}
       {str("merchant_phone") ? <Row label="موبايل التاجر" value={<a href={`tel:${str("merchant_phone")}`} dir="ltr" style={{ color: "var(--color-orange-600)", fontWeight: 700 }}>{str("merchant_phone")}</a>} /> : null}
       {str("merchant_reference") ? <Row label="رقم أوردر التاجر" value={str("merchant_reference")} /> : null}
 
