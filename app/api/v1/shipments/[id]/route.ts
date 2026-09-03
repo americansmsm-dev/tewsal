@@ -32,6 +32,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
                s.cod_amount_p::text AS cod_amount_p, s.payment_method, s.shipping_payer,
                s.pieces_count, s.is_fragile, s.fragile_insured, s.notes_to_courier,
                s.price_p::text AS price_p, s.total_fees_p::text AS total_fees_p,
+               s.merchant_net_p::text AS merchant_net_p,
                s.weight_registered_kg, s.weight_actual_kg, s.attempts_count,
                s.merchant_reference, s.created_at, s.promised_at, s.rescheduled_at,
                s.delivered_at, s.is_wallet_order,
@@ -79,15 +80,18 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
     const codP = BigInt((s.cod_amount_p as string) || "0");
     const priceP = BigInt((s.price_p as string) || "0");
+    // ⚠️ total_fees_p **شامل سعر الشحن** (SHIPPING بند جوه الرسوم) — فمنطرحش الشحن تاني
     const feesP = BigInt((s.total_fees_p as string) || "0");
+    // صافي التاجر المعتمد وقت الإنشاء (= التحصيل − إجمالي الرسوم)
+    const netP = BigInt((s.merchant_net_p as string) || (codP - feesP).toString());
     return ok({
       shipment: {
         ...s,
         codAmount: formatEGP(codP),
         priceAmount: formatEGP(priceP),
         feesAmount: formatEGP(feesP),
-        // صافي التاجر التقديري = التحصيل − (الشحن + الرسوم)
-        netAmount: formatEGP(codP - priceP - feesP),
+        // صافي التاجر = التحصيل − إجمالي الرسوم (الرسوم شاملة الشحن)
+        netAmount: formatEGP(netP),
       },
       items: items.map((it) => ({
         id: it.id, nameAr: it.name_ar, sku: it.sku, qty: it.qty,

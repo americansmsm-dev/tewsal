@@ -82,8 +82,8 @@ export function OrderFullDetails({ shipmentId, showHeader = true }: { shipmentId
       {/* الفلوس */}
       <Section title="💰 الفلوس" />
       <Row label="سعر الشحن" value={s.priceAmount} />
-      <Row label="الرسوم" value={s.feesAmount} />
-      <Row label="صافي التاجر (تقديري)" value={s.netAmount} />
+      <Row label="إجمالي الرسوم (شامل الشحن)" value={s.feesAmount} />
+      <Row label="💵 صافي التاجر (بعد خصم الرسوم)" value={s.netAmount} />
       <Row label="الشحن على مين" value={PAYER_AR[str("shipping_payer") ?? ""] ?? (str("shipping_payer") ?? "—")} />
       <Row label="طريقة الدفع" value={METHOD_AR[str("payment_method") ?? ""] ?? (str("payment_method") ?? "—")} />
       {s.is_wallet_order ? <Row label="من المحفظة" value="أيوه — الشحن بيتخصم من محفظة التاجر" tone="warn" /> : null}
