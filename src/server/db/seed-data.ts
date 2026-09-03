@@ -287,6 +287,14 @@ export const SEED_SETTINGS = [
   },
   // --- التسويات (قرارات ٣ و ٦) ---
   {
+    key: "cod_fee.charge_at",
+    value: "settlement",
+    nameAr: "وقت خصم رسوم التحصيل",
+    description: "settlement = مرة واحدة على إجمالي التحصيل في ميعاد الفاتورة · shipment = على كل أوردر",
+    category: "settlement",
+    valueType: "string",
+  },
+  {
     key: "payout.days",
     value: ["monday", "thursday"],
     nameAr: "أيام تحويل مستحقات التجار",

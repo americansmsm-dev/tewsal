@@ -105,7 +105,9 @@ async function main() {
     // كشف التاجر: مؤكد ٩١٠، تحت التحصيل ١٩١٠ (٢٠٠٠ - ٩٠)
     const stmt = await api("GET", `/api/v1/merchants/${merchantId}/statement`);
     check("٤) كشف: مؤكد ٨١٠", stmt.json?.confirmed, "810.00 ج");
-    check("   كشف: تحت التحصيل ١٨١٠", stmt.json?.inCollection, "1,810.00 ج");
+    // رسوم التحصيل بقت بتتخصم مرة واحدة في ميعاد الفاتورة (مش وقت التسليم)،
+    // فـ«تحت التحصيل» = ٢٠٠٠ − ٩٠ شحن = ١٩١٠ (الـ١٠٠ بتتخصم مع التسوية).
+    check("   كشف: تحت التحصيل ١٩١٠", stmt.json?.inCollection, "1,910.00 ج");
 
     // اعتماد + دفع التسوية الأولى
     check("٥) اعتماد التسوية", (await api("POST", `/api/v1/settlements/${stl1}/approve`)).json?.status, "approved");

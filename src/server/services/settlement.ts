@@ -18,10 +18,18 @@
  * ============================================================
  */
 import { sql } from "drizzle-orm";
-import type { Piastres } from "@/lib/money";
-import { buildPayoutEntry } from "../domain/ledger";
+import { calcCodFee, type CodPercentBasis, type Piastres } from "@/lib/money";
+import { ACC, buildPayoutEntry, buildMerchantChargeEntry } from "../domain/ledger";
 import { postEntry, recomputeMerchantBalance, type SqlExecutor } from "./ledger";
 import { HttpError } from "../http/respond";
+
+async function stringSetting(ex: SqlExecutor, key: string, fallback: string): Promise<string> {
+  const rows = rowsOf<{ value: unknown }>(
+    await ex.execute(sql`SELECT value FROM settings WHERE key = ${key} LIMIT 1`)
+  );
+  const v = rows[0]?.value;
+  return typeof v === "string" && v ? v : fallback;
+}
 
 function rowsOf<T>(r: unknown): T[] {
   if (Array.isArray(r)) return r as T[];
@@ -125,6 +133,28 @@ export async function runSettlement(
     fees += BigInt(e.total_fees_p);
   }
 
+  // ── رسوم التحصيل على إجمالي الفاتورة ──
+  // قرار المالك: رسوم التحصيل مبتتخصمش على كل أوردر — بتتحسب **مرة واحدة**
+  // في ميعاد الفاتورة على **إجمالي التحصيل** بنفس المعادلة (ثابت + ١٪ فوق الحد).
+  const chargeAt = await stringSetting(ex, "cod_fee.charge_at", "settlement");
+  let codFeeP = 0n;
+  if (chargeAt === "settlement" && gross > 0n) {
+    const cfg = rowsOf<{ value_p: string; threshold_p: string; percent_bp: number; basis: string }>(
+      await ex.execute(sql`SELECT value_p::text, threshold_p::text, percent_bp, basis
+                           FROM fee_definitions WHERE code = 'COD' AND is_active = true LIMIT 1`)
+    )[0];
+    if (cfg) {
+      codFeeP = calcCodFee(gross, {
+        flatFee: BigInt(cfg.value_p),
+        threshold: BigInt(cfg.threshold_p),
+        percentBp: cfg.percent_bp,
+        basis: cfg.basis as CodPercentBasis,
+      });
+      fees += codFeeP;
+      net -= codFeeP;
+    }
+  }
+
   // ⚠️ صافي سالب → ترحيل. الشحنات بتفضل غير مسوّاة عشان
   //    المرتجعات تتقاص مع تسليمات الدورة الجاية.
   if (net <= 0n) {
@@ -157,6 +187,23 @@ export async function runSettlement(
       RETURNING id
     `)
   )[0]!;
+
+  // قيد رسوم التحصيل الدورية: مدين مستحقات التاجر / دائن إيراد التحصيل.
+  // لازم يتقيّد في الدفتر عشان رصيد التاجر المشتق يفضل مطابق (فحص I4).
+  if (codFeeP > 0n) {
+    await postEntry(
+      ex,
+      buildMerchantChargeEntry({
+        sourceId: settlement.id,
+        merchantId: input.merchantId,
+        amountP: codFeeP,
+        kind: "cod_fee_settlement",
+        memo: "رسوم التحصيل على إجمالي الفاتورة",
+        revenueAccount: ACC.revenueCodFee(),
+      }),
+      { actorUserId: input.actorUserId }
+    );
+  }
 
   // البنود + قفل الشحنات (is_settled بيتعمل عند الدفع مش دلوقتي —
   // عشان لو التسوية اتلغت الشحنات ترجع للـ pool)

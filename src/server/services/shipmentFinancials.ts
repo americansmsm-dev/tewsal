@@ -156,6 +156,12 @@ export async function buildTransitionFinancialEntry(
 /** رسوم التحصيل على المبلغ المحصّل فعلًا — من تعريف COD */
 async function computeCodFee(ex: SqlExecutor, collectedP: bigint): Promise<bigint> {
   if (collectedP <= 0n) return 0n; // مدفوع مقدمًا
+  // قرار المالك: رسوم التحصيل بتتخصم **مرة واحدة على إجمالي الفاتورة** في ميعاد
+  // التحويل — مش على كل أوردر. فالقيد وقت التسليم مبيخصمش رسوم تحصيل.
+  const chargeAt = rowsOf<{ value: unknown }>(
+    await ex.execute(sql`SELECT value FROM settings WHERE key = 'cod_fee.charge_at' LIMIT 1`)
+  )[0]?.value;
+  if ((typeof chargeAt === "string" ? chargeAt : "settlement") === "settlement") return 0n;
   const rows = rowsOf<{
     value_p: string;
     percent_bp: number;

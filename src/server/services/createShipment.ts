@@ -170,6 +170,8 @@ export async function createShipment(
   ]);
 
   const allowedOpenPieces = await numberSetting(ex, "shipment.allowed_open_pieces", 2);
+  // رسوم التحصيل: settlement = مرة واحدة على إجمالي الفاتورة (الافتراضي) · shipment = على كل أوردر
+  const codFeeAtSettlement = (await stringSetting(ex, "cod_fee.charge_at", "settlement")) === "settlement";
 
   const pricingInput: ShipmentPricingInput = {
     merchantId: merchant.id,
@@ -186,6 +188,7 @@ export async function createShipment(
     fragileInsured: input.fragileInsured ?? false,
     serviceType: input.serviceType ?? "deliver",
     codEnabled,
+    codFeeAtSettlement,
     isRemoteArea: isRemote,
     remoteSurchargeP,
   };
@@ -423,6 +426,14 @@ async function loadFeeOverrides(ex: SqlExecutor): Promise<FeeOverride[]> {
     valueP: BigInt(r.value_p),
     percentBp: r.percent_bp,
   }));
+}
+
+async function stringSetting(ex: SqlExecutor, key: string, fallback: string): Promise<string> {
+  const rows = rowsOf<{ value: unknown }>(
+    await ex.execute(sql`SELECT value FROM settings WHERE key = ${key} LIMIT 1`)
+  );
+  const v = rows[0]?.value;
+  return typeof v === "string" && v ? v : fallback;
 }
 
 async function numberSetting(ex: SqlExecutor, key: string, fallback: number): Promise<number> {

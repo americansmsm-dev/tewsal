@@ -682,6 +682,8 @@ export function buildMerchantChargeEntry(i: {
   amountP: Piastres;
   kind: string;
   memo: string;
+  /** حساب الإيراد — افتراضي إيرادات أخرى (مثال: إيراد التحصيل للرسم الدوري) */
+  revenueAccount?: AccountRef;
 }): DraftEntry {
   if (i.amountP <= 0n) throw new Error("رسم صفر مبيعملش قيد");
   return entry({
@@ -691,7 +693,7 @@ export function buildMerchantChargeEntry(i: {
     kind: i.kind,
     lines: [
       { account: ACC.merchantPayable(i.merchantId), debitP: i.amountP, creditP: 0n, memo: i.memo, merchantId: i.merchantId },
-      { account: ACC.revenueOther(), debitP: 0n, creditP: i.amountP, memo: i.memo, merchantId: i.merchantId },
+      { account: i.revenueAccount ?? ACC.revenueOther(), debitP: 0n, creditP: i.amountP, memo: i.memo, merchantId: i.merchantId },
     ],
   });
 }

@@ -80,6 +80,8 @@ export interface ShipmentPricingInput {
   serviceType?: string;
   /** المحافظة دي بتدعم التحصيل؟ */
   codEnabled: boolean;
+  /** لو true: رسوم التحصيل مبتتحسبش على الأوردر — بتتحسب مرة واحدة على إجمالي التسوية */
+  codFeeAtSettlement?: boolean;
   isRemoteArea: boolean;
   remoteSurchargeP: Piastres;
 }
@@ -230,7 +232,8 @@ export function calculateShipment(
       throw new Error("خدمة التحصيل مش متاحة في المحافظة دي");
     }
     const cod = findFee("COD");
-    if (cod) {
+    // رسوم التحصيل بتتحسب على إجمالي التسوية (ميعاد الفاتورة) مش على كل أوردر
+    if (cod && !input.codFeeAtSettlement) {
       const amount = calcCodFee(input.codAmountP, {
         flatFee: cod.valueP,
         threshold: cod.thresholdP,
