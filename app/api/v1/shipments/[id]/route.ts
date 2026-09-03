@@ -1,5 +1,6 @@
 /**
  * GET /api/v1/shipments/:id — تفاصيل شحنة كاملة (للبوليصة والعرض).
+ * بيرجّع كل بيانات الأوردر + قطعه + **تاريخ كل خطوة** عدّى بيها.
  */
 import { type NextRequest } from "next/server";
 import { sql } from "drizzle-orm";
@@ -25,20 +26,24 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
     const rows = rowsOf<Record<string, unknown>>(
       await db.execute(sql`
-        SELECT s.id, s.awb, s.status, s.service_type,
+        SELECT s.id, s.awb, s.status, s.service_type, s.merchant_id,
                s.recipient_name, s.recipient_phone, s.recipient_phone_alt,
                s.address_line, s.landmark,
                s.cod_amount_p::text AS cod_amount_p, s.payment_method, s.shipping_payer,
                s.pieces_count, s.is_fragile, s.fragile_insured, s.notes_to_courier,
                s.price_p::text AS price_p, s.total_fees_p::text AS total_fees_p,
-               s.merchant_reference, s.created_at, s.rescheduled_at, s.delivered_at, s.is_wallet_order,
+               s.weight_registered_kg, s.weight_actual_kg, s.attempts_count,
+               s.merchant_reference, s.created_at, s.promised_at, s.rescheduled_at,
+               s.delivered_at, s.is_wallet_order,
                g.name_ar AS governorate, z.name_ar AS zone, a.name_ar AS area,
-               m.name_ar AS merchant_name, m.code AS merchant_code, m.phone AS merchant_phone
+               m.name_ar AS merchant_name, m.code AS merchant_code, m.phone AS merchant_phone,
+               cu.full_name AS courier_name, cu.phone AS courier_phone
         FROM shipments s
         JOIN governorates g ON g.id = s.governorate_id
         JOIN zones z ON z.id = s.zone_id
         LEFT JOIN areas a ON a.id = s.area_id
         LEFT JOIN merchants m ON m.id = s.merchant_id
+        LEFT JOIN users cu ON cu.id = s.current_courier_id
         WHERE s.id = ${id}::uuid
         LIMIT 1
       `)
@@ -59,15 +64,36 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       `)
     );
 
+    // تاريخ كل خطوة عدّت بيها الشحنة (مين، إمتى، ليه)
+    const history = rowsOf<Record<string, unknown>>(
+      await db.execute(sql`
+        SELECT h.from_status, h.to_status, h.reason_code, h.note,
+               h.actor_name, h.actor_role, h.occurred_at, h.recorded_at, h.source,
+               rc.name_ar AS reason_label
+        FROM shipment_status_history h
+        LEFT JOIN shipment_reason_codes rc ON rc.code = h.reason_code
+        WHERE h.shipment_id = ${id}::uuid
+        ORDER BY h.occurred_at ASC, h.recorded_at ASC
+      `)
+    );
+
+    const codP = BigInt((s.cod_amount_p as string) || "0");
+    const priceP = BigInt((s.price_p as string) || "0");
+    const feesP = BigInt((s.total_fees_p as string) || "0");
     return ok({
       shipment: {
         ...s,
-        codAmount: formatEGP(BigInt((s.cod_amount_p as string) || "0")),
+        codAmount: formatEGP(codP),
+        priceAmount: formatEGP(priceP),
+        feesAmount: formatEGP(feesP),
+        // صافي التاجر التقديري = التحصيل − (الشحن + الرسوم)
+        netAmount: formatEGP(codP - priceP - feesP),
       },
       items: items.map((it) => ({
         id: it.id, nameAr: it.name_ar, sku: it.sku, qty: it.qty,
         unitPriceP: it.unit_price_p, price: formatEGP(BigInt(it.unit_price_p || "0")), status: it.status,
       })),
+      history,
     });
   } catch (err) {
     return handleError(err);

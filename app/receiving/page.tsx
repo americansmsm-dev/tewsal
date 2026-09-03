@@ -10,6 +10,7 @@ import { useCallback, useEffect, useState } from "react";
 import { AppHeader } from "../components/AppHeader";
 import { AppNav } from "../components/AppNav";
 import { TransitionModal } from "../components/TransitionModal";
+import { OrderDetailModal } from "../components/OrderModals";
 import { useCurrentUser } from "../lib/useCurrentUser";
 import { apiCall, toArabicDigits, type Role } from "../lib/client";
 
@@ -35,6 +36,7 @@ export default function ReceivingPage() {
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [photo, setPhoto] = useState<Parcel | null>(null);
+  const [detail, setDetail] = useState<Parcel | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -123,7 +125,7 @@ export default function ReceivingPage() {
                 <div style={{ display: "grid", gap: 8 }}>
                   {parcels.map((p) => (
                     <div key={p.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "0.6rem 0.7rem", background: "var(--bg-soft)", borderRadius: 10, flexWrap: "wrap" }}>
-                      <div style={{ minWidth: 0 }}>
+                      <div style={{ minWidth: 0, cursor: "pointer" }} onClick={() => setDetail(p)} title="تفاصيل الأوردر كاملة">
                         <div style={{ display: "inline-block", fontSize: "0.68rem", fontWeight: 800, color: IS_RETURN(p) ? "#dc2626" : "#2563eb", marginBottom: 2 }}>{IS_RETURN(p) ? "↩️ مرتجع" : "📦 وارد"}</div>
                         <div style={{ fontWeight: 700, fontSize: "0.9rem" }}>{p.merchant_name ?? "—"} <span dir="ltr" style={{ color: "var(--muted)", fontWeight: 600, fontSize: "0.75rem" }}>{p.awb}</span></div>
                         <div style={{ fontSize: "0.78rem", color: "var(--muted)" }}>للعميل: {p.recipient_name} · {p.governorate}</div>
@@ -142,6 +144,10 @@ export default function ReceivingPage() {
           </div>
         ))}
       </main>
+
+      {detail && (
+        <OrderDetailModal shipmentId={detail.id} onClose={() => setDetail(null)} />
+      )}
 
       {photo && (
         <TransitionModal

@@ -6,6 +6,7 @@
  * صور الإثبات والتوقيع المرفوعة من المندوب.
  */
 import { useCallback, useEffect, useState } from "react";
+import { OrderFullDetails } from "./OrderFullDetails";
 import { Overlay, ErrorBox } from "./TransitionModal";
 import { apiCall } from "../lib/client";
 
@@ -93,6 +94,9 @@ export function ShipmentDetailsModal({
       <div style={{ color: "var(--muted)", fontSize: "0.82rem", marginBottom: 14 }}>
         <span dir="ltr" style={{ fontWeight: 700 }}>{awb}</span>
       </div>
+
+      {/* تفاصيل الأوردر كاملة + خط زمني بكل خطوة */}
+      <OrderFullDetails shipmentId={shipmentId} showHeader={false} />
 
       {loading ? (
         <div style={{ color: "var(--muted)", padding: "1rem 0" }}>جاري التحميل...</div>
