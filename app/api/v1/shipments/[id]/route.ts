@@ -36,6 +36,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
                s.weight_registered_kg, s.weight_actual_kg, s.attempts_count,
                s.merchant_reference, s.created_at, s.promised_at, s.rescheduled_at,
                s.delivered_at, s.is_wallet_order,
+               -- تاريخ الاستلام من التاجر: بيتستخرج من تاريخ الحالات (مفيش عمود ليه)
+               (SELECT h.occurred_at FROM shipment_status_history h
+                 WHERE h.shipment_id = s.id AND h.to_status = 'picked_up'
+                 ORDER BY h.occurred_at ASC LIMIT 1) AS picked_up_at,
                g.name_ar AS governorate, z.name_ar AS zone, a.name_ar AS area,
                m.name_ar AS merchant_name, m.code AS merchant_code, m.phone AS merchant_phone,
                cu.full_name AS courier_name, cu.phone AS courier_phone

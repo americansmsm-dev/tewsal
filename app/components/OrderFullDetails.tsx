@@ -121,9 +121,10 @@ export function OrderFullDetails({ shipmentId, showHeader = true }: { shipmentId
       <Row label="المندوب الحالي" value={str("courier_name") ?? "مفيش"} />
       {str("courier_phone") ? <Row label="موبايل المندوب" value={<a href={`tel:${str("courier_phone")}`} dir="ltr">{str("courier_phone")}</a>} /> : null}
       <Row label="اتعمل في" value={dt(s.created_at) ?? "—"} />
+      <Row label="📥 تاريخ الاستلام من التاجر" value={dt(s.picked_up_at) ?? "لسه ماتستلمش"} />
+      <Row label="✅ تاريخ التسليم للعميل" value={dt(s.delivered_at) ?? "لسه ماتسلّمش"} />
       {dt(s.promised_at) ? <Row label="⏳ الموعد المتوقع" value={dt(s.promised_at)} /> : null}
       {dt(s.rescheduled_at) ? <Row label="⏰ مؤجل لحد" value={dt(s.rescheduled_at)} tone="warn" /> : null}
-      {dt(s.delivered_at) ? <Row label="✅ اتسلّم في" value={dt(s.delivered_at)} /> : null}
 
       {/* قطع الأوردر */}
       {d.items.length > 0 && (

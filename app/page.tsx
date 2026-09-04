@@ -39,6 +39,16 @@ interface ShipmentRow {
   current_courier_id?: string | null;
   merchant_name?: string;
   courier_name?: string;
+  picked_up_at?: string | null;
+  delivered_at?: string | null;
+}
+
+/** تاريخ قصير بالعربي (يوم/شهر + وقت) */
+function shortDate(v?: string | null): string | null {
+  if (!v) return null;
+  const d = new Date(v);
+  if (isNaN(d.getTime())) return null;
+  return d.toLocaleString("ar-EG", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 }
 
 const STATUS_FILTERS: (ShipmentStatus | "")[] = [
@@ -201,6 +211,7 @@ export default function Dashboard() {
                 <Th>المستلم</Th>
                 <Th>المحافظة</Th>
                 <Th>التحصيل</Th>
+                <Th>الاستلام / التسليم</Th>
                 <Th>الحالة</Th>
                 <Th>إجراء</Th>
               </tr>
@@ -208,13 +219,13 @@ export default function Dashboard() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={7} style={{ padding: "2rem", textAlign: "center", color: "var(--muted)" }}>
+                  <td colSpan={8} style={{ padding: "2rem", textAlign: "center", color: "var(--muted)" }}>
                     جاري التحميل...
                   </td>
                 </tr>
               ) : rows.length === 0 ? (
                 <tr>
-                  <td colSpan={7} style={{ padding: "2.5rem", textAlign: "center", color: "var(--muted)" }}>
+                  <td colSpan={8} style={{ padding: "2.5rem", textAlign: "center", color: "var(--muted)" }}>
                     مفيش شحنات {filter ? "في الحالة دي" : "لسه"} — ابدأ بإنشاء شحنة جديدة
                   </td>
                 </tr>
@@ -248,6 +259,16 @@ export default function Dashboard() {
                         ) : (
                           <span style={{ color: "var(--muted)" }}>—</span>
                         )}
+                      </Td>
+                      <Td>
+                        <div style={{ fontSize: "0.75rem", whiteSpace: "nowrap" }}>
+                          <div style={{ color: shortDate(s.picked_up_at) ? "var(--ink)" : "var(--muted)" }}>
+                            📥 {shortDate(s.picked_up_at) ?? "—"}
+                          </div>
+                          <div style={{ color: shortDate(s.delivered_at) ? "var(--color-success)" : "var(--muted)" }}>
+                            ✅ {shortDate(s.delivered_at) ?? "—"}
+                          </div>
+                        </div>
                       </Td>
                       <Td>
                         <span className="badge" style={tone}>

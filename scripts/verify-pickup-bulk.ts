@@ -26,7 +26,7 @@ async function api(m: string, p: string, b?: unknown) {
   });
   const sc = r.headers.getSetCookie?.() ?? [];
   const s = sc.find((x) => x.startsWith("tewsal_session="));
-  if (s) cookie = s.split(";")[0];
+  if (s) cookie = s.split(";")[0] ?? "";
   return { status: r.status, json: (await r.json().catch(() => null)) as never };
 }
 const j = (o: unknown) => JSON.stringify(o).slice(0, 160);
@@ -95,7 +95,7 @@ async function main() {
   const okr = await api("POST", "/api/v1/pickups", { merchantId, shipmentIds: ids, pickupAddress: "مخزن التاجر — مدينة نصر", courierId });
   const oj = okr.json as { pickupId?: string; ordersCount?: number; status?: string; assigned?: number; serviceFee?: string };
   check("٧) نداء واحد: استلام + إسناد", okr.status === 201 && oj.status === "assigned" && oj.assigned === 5, `${okr.status} ${j(oj)}`);
-  check("   الرسم مجاني عند ٥", oj.serviceFee?.startsWith("0"), oj.serviceFee);
+  check("   الرسم مجاني عند ٥", !!oj.serviceFee?.startsWith("0"), oj.serviceFee);
 
   const pid = oj.pickupId!;
   const [prow] = await c`SELECT status, courier_id::text, orders_count FROM pickups WHERE id = ${pid}::uuid`;
