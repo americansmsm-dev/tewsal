@@ -48,7 +48,11 @@ export default function ReportsPage() {
       <AppHeader user={user} />
       <AppNav role={user.role} />
       <main style={{ maxWidth: 1120, margin: "0 auto", padding: "1.25rem" }}>
-        <h2 style={{ margin: "0 0 1rem", fontSize: "1.15rem" }}>التقارير</h2>
+        <h2 style={{ margin: "0 0 0.25rem", fontSize: "1.15rem" }}>التقارير</h2>
+        <p style={{ margin: "0 0 1rem", color: "var(--muted)", fontSize: "0.83rem", lineHeight: 1.7 }}>
+          كل الأرقام هنا <b>مشتقّة من الدفتر المحاسبي</b> مباشرة — يعني مفيش رقم متكتب بالإيد، وكله يتطابق مع فلوسك الفعلية.
+          الأرقام <b>من بداية التشغيل لحد دلوقتي</b>. كل قسم تحته سطر بيشرح الرقم معناه إيه.
+        </p>
 
         <div style={{ display: "flex", gap: 4, marginBottom: "1.25rem", flexWrap: "wrap" }}>
           {tabs.map((t) => (
@@ -96,10 +100,18 @@ function AccountingTab() {
   if (loading) return <Muted>جاري التحميل...</Muted>;
   if (!data) return <Muted>مفيش بيانات</Muted>;
 
+  const net = BigInt(data.pnl.netProfitP);
   return (
     <div style={{ display: "grid", gap: "1.25rem" }}>
+      {/* الملخص — أهم ٣ أرقام قبل أي جدول */}
+      <StatRow>
+        <Stat label="إجمالي الإيراد" value={egp(data.pnl.totalRevenueP)} tone="accent" note="كل اللي دخلك من الشحن والتحصيل والرسوم" />
+        <Stat label="إجمالي المصروف" value={egp(data.pnl.totalExpenseP)} note="عمولات وتعويضات وفروقات ومصاريف" />
+        <Stat label={net >= 0n ? "صافي الربح" : "صافي الخسارة"} value={egp(data.pnl.netProfitP)} tone={net >= 0n ? "good" : "bad"} note="الإيراد ناقص المصروف" />
+      </StatRow>
+
       {/* الأرباح والخسائر */}
-      <Section title="الأرباح والخسائر">
+      <Section title="الأرباح والخسائر" hint="فلوسك دخلت منين وخرجت فين، والفرق بينهم هو مكسبك الصافي. الأرقام من بداية التشغيل لحد دلوقتي.">
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
           <div>
             <SubHead>الإيرادات</SubHead>
@@ -119,13 +131,13 @@ function AccountingTab() {
       </Section>
 
       {/* الإيرادات حسب النوع */}
-      <Section title="الإيرادات حسب النوع">
+      <Section title="الإيرادات حسب النوع" hint="إيرادك جاي منين بالظبط — شحن، تحصيل، مرتجعات، أو رسوم تانية.">
         {data.revenue.rows.map((l) => <KV key={l.code} k={l.nameAr} v={egp(l.amountP)} />)}
         <KV k="الإجمالي" v={egp(data.revenue.totalP)} strong />
       </Section>
 
       {/* ميزان المراجعة */}
-      <Section title="ميزان المراجعة">
+      <Section title="ميزان المراجعة" hint="كشف بكل حسابات الشركة. المهم فيه إن «مدين» تساوي «دائن» بالظبط — وده اللي بيضمن إن مفيش جنيه ضايع أو متسجّل غلط.">
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.84rem" }}>
             <thead>
@@ -177,7 +189,8 @@ function JournalTab() {
   if (loading) return <Muted>جاري التحميل...</Muted>;
 
   return (
-    <div className="card" style={{ overflowX: "auto" }}>
+    <Section title="دفتر اليومية" hint="كل عملية مالية حصلت في السيستم بالترتيب الزمني — تسليم، مرتجع، تحويل، عهدة. ده السجل الرسمي: مفيش حاجة بتتمسح منه، وأي تصحيح بيتسجّل كقيد جديد.">
+    <div style={{ overflowX: "auto", margin: "0 -0.35rem" }}>
       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.84rem", minWidth: 640 }}>
         <thead>
           <tr style={{ background: "var(--bg-soft)", textAlign: "right" }}>
@@ -198,6 +211,7 @@ function JournalTab() {
         </tbody>
       </table>
     </div>
+    </Section>
   );
 }
 
@@ -215,8 +229,19 @@ function CouriersTab() {
   }, []);
   if (loading) return <Muted>جاري التحميل...</Muted>;
 
+  const totalDelivered = rows.reduce((s, c) => s + c.deliveredCount, 0);
+  const totalCash = rows.reduce((s, c) => s + BigInt(c.cashHeldP), 0n);
+  const holding = rows.filter((c) => BigInt(c.cashHeldP) > 0n).length;
+
   return (
-    <div className="card" style={{ overflowX: "auto" }}>
+    <div style={{ display: "grid", gap: "1rem" }}>
+      <StatRow>
+        <Stat label="إجمالي التسليمات" value={String(totalDelivered)} tone="accent" note={`من ${rows.length} مندوب`} />
+        <Stat label="كاش في عهدة المناديب" value={egp(totalCash.toString())} tone={totalCash > 0n ? "bad" : "good"} note={holding > 0 ? `${holding} مندوب ماسك كاش` : "كله اتسلّم للخزنة"} />
+      </StatRow>
+
+      <Section title="أداء المناديب" hint="كل مندوب بيسلّم كام، وبيرجّع كام، وماسك كاش قد إيه. «من أول مرة» = نسبة الأوردرات اللي سلّمها من أول محاولة — كل ما تزيد كل ما كان أحسن. الكاش الأصفر معناه لسه في جيبه ومحتاج يسلّمه.">
+    <div style={{ overflowX: "auto", margin: "0 -0.35rem" }}>
       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.83rem", minWidth: 820 }}>
         <thead>
           <tr style={{ background: "var(--bg-soft)", textAlign: "right" }}>
@@ -240,6 +265,8 @@ function CouriersTab() {
         </tbody>
       </table>
     </div>
+      </Section>
+    </div>
   );
 }
 
@@ -257,8 +284,19 @@ function MerchantsTab() {
   }, []);
   if (loading) return <Muted>جاري التحميل...</Muted>;
 
+  const totalRev = rows.reduce((s, m) => s + BigInt(m.revenueP), 0n);
+  const totalShip = rows.reduce((s, m) => s + m.shipmentsCount, 0);
+  const best = [...rows].sort((a, b) => (BigInt(b.revenueP) > BigInt(a.revenueP) ? 1 : -1))[0];
+
   return (
-    <div className="card" style={{ overflowX: "auto" }}>
+    <div style={{ display: "grid", gap: "1rem" }}>
+      <StatRow>
+        <Stat label="إيرادك من التجار" value={egp(totalRev.toString())} tone="accent" note={`من ${totalShip} شحنة · ${rows.length} تاجر`} />
+        {best && <Stat label="أعلى تاجر إيرادًا" value={best.name} tone="good" note={egp(best.revenueP)} />}
+      </StatRow>
+
+      <Section title="ربحية التجار" hint="كل تاجر بيجيبلك كام، وبيسلّم نسبة قد إيه. «نسبة التسليم» العالية معناها تاجر بضاعته بتوصل — والتاجر اللي نسبته واطية بيكلّفك مرتجعات. استخدم ده وإنت بتفاوض على الأسعار.">
+    <div style={{ overflowX: "auto", margin: "0 -0.35rem" }}>
       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.83rem", minWidth: 820 }}>
         <thead>
           <tr style={{ background: "var(--bg-soft)", textAlign: "right" }}>
@@ -281,6 +319,8 @@ function MerchantsTab() {
           ))}
         </tbody>
       </table>
+    </div>
+      </Section>
     </div>
   );
 }
@@ -308,7 +348,7 @@ function OpsTab() {
   return (
     <div style={{ display: "grid", gap: "1.25rem" }}>
       {/* دوران شحنات المناديب */}
-      <Section title="دوران شحنات المناديب — الشحنات في العهدة">
+      <Section title="دوران شحنات المناديب — الشحنات في العهدة" hint="شحنات قاعدة مع المناديب من إمتى. كل ما العمر يزيد، كل ما الأوردر اتأخر والعميل زهق — تابع اللي فوق يومين.">
         {data.turnover.length === 0 ? <Muted small>مفيش شحنات في العهدة دلوقتي 🎉</Muted> : (
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.84rem" }}>
@@ -353,7 +393,7 @@ function OpsTab() {
       </Section>
 
       {/* خزائن الفروع */}
-      <Section title="خزائن الفروع">
+      <Section title="خزائن الفروع" hint="الكاش الموجود في كل فرع دلوقتي، واللي دخل من المناديب، واللي اتودع في البنك.">
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.84rem" }}>
             <thead><tr style={{ background: "var(--bg-soft)", textAlign: "right" }}><Th>الفرع</Th><Th>الكاش في الخزنة</Th><Th>وارد من المناديب</Th><Th>مودَع في البنك</Th></tr></thead>
@@ -376,7 +416,7 @@ function OpsTab() {
       </Section>
 
       {/* البيك أب الشهري */}
-      <Section title="البيك أب الشهري">
+      <Section title="البيك أب الشهري" hint="عدد مرات الاستلام من التجار كل شهر والأوردرات اللي اتجمعت ورسوم الخدمة اللي اتحسبت.">
         {data.pickups.length === 0 ? <Muted small>مفيش استلامات مكتملة لسه</Muted> : (
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.84rem" }}>
@@ -405,10 +445,13 @@ function Rate({ v, good, inline }: { v: number; good: boolean; inline?: boolean 
                     : (v <= 10 ? "var(--color-success)" : v <= 25 ? "var(--color-warning)" : "var(--color-danger)");
   return <span style={{ fontWeight: 700, color: tone, fontSize: inline ? "0.72rem" : undefined }}>{inline ? `(${v}%)` : `${v}%`}</span>;
 }
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+/** عنوان القسم + سطر يشرح الرقم ده معناه إيه بالبلدي */
+function Section({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
   return (
     <div className="card" style={{ padding: "1.1rem 1.25rem" }}>
-      <h3 style={{ margin: "0 0 0.9rem", fontSize: "1rem" }}>{title}</h3>
+      <h3 style={{ margin: 0, fontSize: "1rem" }}>{title}</h3>
+      {hint && <p style={{ margin: "0.25rem 0 0.9rem", color: "var(--muted)", fontSize: "0.8rem", lineHeight: 1.6 }}>{hint}</p>}
+      {!hint && <div style={{ height: "0.9rem" }} />}
       {children}
     </div>
   );
@@ -423,6 +466,21 @@ function KV({ k, v, strong }: { k: string; v: string; strong?: boolean }) {
     </div>
   );
 }
+/** كارت رقم كبير — الأرقام المهمة تبان من غير ما تدوّر في جدول */
+function Stat({ label, value, tone, note }: { label: string; value: string; tone?: "good" | "bad" | "accent"; note?: string }) {
+  const color = tone === "good" ? "var(--color-success)" : tone === "bad" ? "var(--color-danger)" : tone === "accent" ? "var(--color-orange-600)" : "var(--ink)";
+  return (
+    <div className="card" style={{ padding: "0.9rem 1rem", minWidth: 0 }}>
+      <div style={{ fontSize: "0.76rem", color: "var(--muted)", marginBottom: 4 }}>{label}</div>
+      <div style={{ fontSize: "1.35rem", fontWeight: 800, color, lineHeight: 1.2, wordBreak: "break-word" }}>{value}</div>
+      {note && <div style={{ fontSize: "0.7rem", color: "var(--muted)", marginTop: 3 }}>{note}</div>}
+    </div>
+  );
+}
+function StatRow({ children }: { children: React.ReactNode }) {
+  return <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "0.7rem" }}>{children}</div>;
+}
+
 function Muted({ children, small }: { children: React.ReactNode; small?: boolean }) {
   return <div style={{ color: "var(--muted)", padding: small ? "0.3rem 0" : "1.5rem", textAlign: small ? "right" : "center", fontSize: small ? "0.82rem" : undefined }}>{children}</div>;
 }
