@@ -28,6 +28,7 @@ export const USER_ROLES = [
   "super_admin",
   "branch_manager",
   "ops",
+  "data_entry",
   "courier",
   "merchant",
   "accountant",
@@ -38,7 +39,8 @@ export type UserRole = (typeof USER_ROLES)[number];
 export const ROLE_LABELS_AR: Record<UserRole, string> = {
   super_admin: "مدير النظام",
   branch_manager: "مدير الفرع",
-  ops: "العمليات والفرز",
+  ops: "مسؤول المخزن",
+  data_entry: "موظف إدخال بيانات",
   courier: "مندوب",
   merchant: "تاجر",
   accountant: "محاسب",

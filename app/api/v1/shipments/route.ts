@@ -18,7 +18,7 @@ import { ok, fail, handleError } from "@/server/http/respond";
 
 export const dynamic = "force-dynamic";
 
-const CREATORS = ["super_admin", "branch_manager", "ops", "merchant"] as const;
+const CREATORS = ["super_admin", "branch_manager", "ops", "data_entry", "merchant"] as const;
 
 const moneyString = z.string().regex(/^\d+(\.\d{1,2})?$/, "مبلغ غير صالح");
 

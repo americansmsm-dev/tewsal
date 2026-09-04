@@ -14,7 +14,7 @@ interface NavItem {
 }
 
 const ITEMS: NavItem[] = [
-  { href: "/", label: "الشحنات", roles: ["super_admin", "branch_manager", "ops", "accountant", "support"] },
+  { href: "/", label: "الشحنات", roles: ["super_admin", "branch_manager", "ops", "data_entry", "accountant", "support"] },
   { href: "/pickups", label: "الاستلام", roles: ["super_admin", "branch_manager", "ops"] },
   { href: "/scan", label: "المسح", roles: ["super_admin", "branch_manager", "ops"] },
   { href: "/receiving", label: "الوارد", roles: ["super_admin", "branch_manager", "ops"] },
@@ -22,7 +22,7 @@ const ITEMS: NavItem[] = [
   { href: "/returns", label: "المرتجعات", roles: ["super_admin", "branch_manager", "ops", "accountant"] },
   { href: "/warehouse", label: "المخزن", roles: ["super_admin", "branch_manager", "ops"] },
   { href: "/merchants", label: "التجار", roles: ["super_admin", "branch_manager", "ops", "accountant"] },
-  { href: "/import", label: "استيراد", roles: ["super_admin", "branch_manager", "ops"] },
+  { href: "/import", label: "استيراد", roles: ["super_admin", "branch_manager", "ops", "data_entry"] },
   { href: "/treasury", label: "الخزينة", roles: ["super_admin", "branch_manager", "accountant"] },
   { href: "/settlements", label: "التسويات", roles: ["super_admin", "branch_manager", "accountant"] },
   { href: "/courier-commissions", label: "عمولات المناديب", roles: ["super_admin", "branch_manager", "accountant"] },

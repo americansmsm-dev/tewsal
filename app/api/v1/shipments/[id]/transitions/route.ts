@@ -50,6 +50,7 @@ const ROLE_MAP: Record<UserRole, Role> = {
   super_admin: "super_admin",
   branch_manager: "branch_manager",
   ops: "ops",
+  data_entry: "data_entry",
   courier: "courier",
   merchant: "merchant",
   accountant: "accountant",

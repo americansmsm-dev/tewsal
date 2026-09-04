@@ -106,6 +106,7 @@ export const ROLES = [
   "super_admin",
   "branch_manager",
   "ops",
+  "data_entry",
   "courier",
   "merchant",
   "accountant",

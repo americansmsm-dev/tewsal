@@ -70,11 +70,22 @@ export async function POST(req: NextRequest) {
   }
 }
 
+/** مين يشوف التسويات: المالية والإدارة + مسؤول المخزن (صفحة التاجر) */
+const VIEWERS: readonly string[] = ["super_admin", "branch_manager", "accountant", "ops"];
+
 export async function GET(req: NextRequest) {
   try {
-    await requireUser(req);
+    const ctx = await requireUser(req);
     const url = new URL(req.url);
-    const merchantId = url.searchParams.get("merchantId");
+    let merchantId = url.searchParams.get("merchantId");
+    // ⚠️ قبل كده أي مستخدم مسجّل كان يشوف تسويات كل التجار.
+    //    التاجر بيتقفل على تسوياته هو بس، وأي دور تاني ممنوع.
+    if (ctx.user.role === "merchant") {
+      if (!ctx.user.merchantId) return fail("FORBIDDEN", "مش من صلاحيتك", 403);
+      merchantId = ctx.user.merchantId;
+    } else if (!VIEWERS.includes(ctx.user.role)) {
+      return fail("FORBIDDEN", "مش من صلاحيتك", 403);
+    }
     const status = url.searchParams.get("status");
     const limit = Math.min(Number(url.searchParams.get("limit") ?? 50), 200);
 

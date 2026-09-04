@@ -10,7 +10,7 @@ import { requireRole } from "@/server/http/context";
 import { ok, fail, handleError } from "@/server/http/respond";
 
 export const dynamic = "force-dynamic";
-const OPS = ["super_admin", "branch_manager", "ops"] as const;
+const OPS = ["super_admin", "branch_manager", "ops", "data_entry"] as const;
 
 const rowSchema = z.object({
   recipientName: z.string().optional(),
