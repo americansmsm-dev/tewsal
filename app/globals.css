@@ -109,6 +109,11 @@
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 14px;
+    /* عنصر جوّه grid/flex بياخد min-width:auto فمبيصغّرش تحت عرض محتواه —
+       فيطلع أعرض من الشاشة والزيادة تتقص (عندنا overflow-x: clip).
+       دول بيخلّوه يصغّر والجدول العريض جوّه يسكرول لوحده. */
+    min-width: 0;
+    max-width: 100%;
   }
   .btn {
     display: inline-flex;

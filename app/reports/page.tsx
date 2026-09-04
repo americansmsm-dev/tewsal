@@ -112,7 +112,7 @@ function AccountingTab() {
 
       {/* الأرباح والخسائر */}
       <Section title="الأرباح والخسائر" hint="فلوسك دخلت منين وخرجت فين، والفرق بينهم هو مكسبك الصافي. الأرقام من بداية التشغيل لحد دلوقتي.">
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(190px, 100%), 1fr))", gap: "1rem", minWidth: 0 }}>
           <div>
             <SubHead>الإيرادات</SubHead>
             {data.pnl.revenue.map((l) => <KV key={l.code} k={l.nameAr} v={egp(l.amountP)} />)}
@@ -478,7 +478,14 @@ function Stat({ label, value, tone, note }: { label: string; value: string; tone
   );
 }
 function StatRow({ children }: { children: React.ReactNode }) {
-  return <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "0.7rem" }}>{children}</div>;
+  // ⚠️ min(150px,100%) مهمة: من غيرها الشبكة بترفض تصغّر تحت ١٥٠بكسل للعمود
+  //    فبتطلع أعرض من الشاشة على الموبايل والجزء الزايد بيتقص.
+  return (
+    <div style={{
+      display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(150px, 100%), 1fr))",
+      gap: "0.7rem", minWidth: 0, maxWidth: "100%",
+    }}>{children}</div>
+  );
 }
 
 function Muted({ children, small }: { children: React.ReactNode; small?: boolean }) {
