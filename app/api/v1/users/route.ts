@@ -24,12 +24,18 @@ const ADMIN = ["super_admin", "branch_manager"] as const;
 const CREATABLE_ROLES = USER_ROLES.filter((r) => r !== "super_admin" && r !== "merchant");
 
 const createSchema = z.object({
-  fullName: z.string().min(2).max(120),
-  username: z.string().min(3).max(40).regex(/^[a-zA-Z0-9_.]+$/, "الحروف الإنجليزية والأرقام و _ . فقط"),
-  phone: z.string().max(30).optional(),
-  role: z.enum(CREATABLE_ROLES as unknown as [string, ...string[]]),
+  fullName: z.string({ required_error: "اكتب اسم الموظف" })
+    .min(2, "الاسم لازم حرفين على الأقل").max(120, "الاسم طويل أوي"),
+  username: z.string({ required_error: "اكتب اسم الدخول" })
+    .min(3, "اسم الدخول ٣ حروف على الأقل").max(40, "اسم الدخول طويل أوي")
+    .regex(/^[a-zA-Z0-9_.]+$/, "اسم الدخول: حروف إنجليزية وأرقام و _ . بس (من غير مسافات أو عربي)"),
+  phone: z.string().max(30, "رقم التليفون طويل أوي").optional(),
+  role: z.enum(CREATABLE_ROLES as unknown as [string, ...string[]], {
+    // errorMap بيغطي كل حالات الـ enum (ناقص/قيمة غلط) — الرسالة الخام بتطلع إنجليزي
+    errorMap: () => ({ message: "اختار وظيفة صحيحة (مدير فرع · عمليات · مندوب · محاسب · خدمة عملاء)" }),
+  }),
   /** المدير يقدر يحدّد الباسورد بنفسه — وإلا بيتولّد مؤقت */
-  password: z.string().min(8, "الباسورد لازم ٨ حروف على الأقل").max(72).optional(),
+  password: z.string().min(8, "الباسورد لازم ٨ حروف على الأقل").max(72, "الباسورد طويل أوي").optional(),
 });
 
 /** باسورد مؤقت قوي وسهل القراءة */

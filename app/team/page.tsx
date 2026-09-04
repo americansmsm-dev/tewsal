@@ -272,8 +272,15 @@ function CreateUserModal({ onClose, onDone }: { onClose: () => void; onDone: () 
 
   async function submit() {
     setError(null);
+    // تحقق فوري — عشان ميستناش رد السيرفر عشان غلطة بسيطة
+    if (f.fullName.trim().length < 2) { setError("اكتب اسم الموظف (حرفين على الأقل)"); return; }
+    if (f.username.trim().length < 3) { setError("اسم الدخول ٣ حروف على الأقل"); return; }
+    if (!/^[a-zA-Z0-9_.]+$/.test(f.username.trim())) {
+      setError("اسم الدخول: حروف إنجليزية وأرقام و _ . بس (من غير مسافات أو عربي)"); return;
+    }
+    if (f.password && f.password.length < 8) { setError("الباسورد لازم ٨ حروف على الأقل"); return; }
     setBusy(true);
-    const body: Record<string, unknown> = { fullName: f.fullName, username: f.username, role: f.role };
+    const body: Record<string, unknown> = { fullName: f.fullName.trim(), username: f.username.trim(), role: f.role };
     if (f.phone) body.phone = f.phone;
     if (f.password) body.password = f.password;
     const r = await apiCall<{ user: { full_name: string; username: string }; tempPassword: string }>(
