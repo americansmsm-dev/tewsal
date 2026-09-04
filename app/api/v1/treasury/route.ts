@@ -19,6 +19,18 @@ function rowsOf<T>(r: unknown): T[] {
   return [];
 }
 
+/** إجمالي كاش خزائن الفروع — الحساب ده لكل فرع (owner_id = الفرع) */
+async function branchCashTotal(): Promise<bigint> {
+  const rows = rowsOf<{ balance: string }>(
+    await db.execute(sql`
+      SELECT COALESCE(SUM(jl.debit_p) - SUM(jl.credit_p), 0)::text AS balance
+      FROM journal_lines jl JOIN accounts a ON a.id = jl.account_id
+      WHERE a.code = 'BRANCH_CASH'
+    `)
+  );
+  return BigInt(rows[0]?.balance ?? "0");
+}
+
 /** رصيد حساب شركة بالكود */
 async function companyBalance(code: string): Promise<bigint> {
   const rows = rowsOf<{ balance: string }>(
@@ -42,7 +54,8 @@ export async function GET(req: NextRequest) {
       oldest: c.oldest,
     }));
 
-    const [bank, vodafone, instapay, suspense] = await Promise.all([
+    const [branchCash, bank, vodafone, instapay, suspense] = await Promise.all([
+      branchCashTotal(),
       companyBalance("COMPANY_BANK"),
       companyBalance("EWALLET_VODAFONE"),
       companyBalance("EWALLET_INSTAPAY"),
@@ -51,14 +64,23 @@ export async function GET(req: NextRequest) {
 
     const courierTotal = couriers.reduce((s, c) => s + BigInt(c.balanceP), 0n);
 
+    const wallets = vodafone + instapay;
+    // إجمالي فلوس الشركة في كل مكان.
+    // ⚠️ الزيادة المعلّقة **مش بتتجمع** — هي التزام، والكاش بتاعها
+    //    محسوب أصلًا جوّه كاش الخزنة (وإلا كنا هنعدّه مرتين).
+    const total = branchCash + courierTotal + bank + wallets;
+
     return ok({
       couriers,
       accounts: {
+        branchCash: formatEGP(branchCash),
         courierCashTotal: formatEGP(courierTotal),
         bank: formatEGP(bank),
         vodafone: formatEGP(vodafone),
         instapay: formatEGP(instapay),
+        wallets: formatEGP(wallets),
         suspense: formatEGP(-suspense), // التزام = رصيد دائن
+        total: formatEGP(total),
       },
     });
   } catch (err) {

@@ -62,7 +62,7 @@ export default function AgingReportsPage() {
           فلوس محصّلة ولسه ماوصلتش الخزنة — مقسّمة بعمرها. كل ما زاد العمر زاد الخطر.
         </p>
 
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10, marginBottom: "1.75rem" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(180px, 100%), 1fr))", gap: 10, marginBottom: "1.75rem", minWidth: 0 }}>
           <Stat label="كاش معلّق مع المناديب" value={data?.courierCash.grandTotal} tone="warn" />
           <Stat label="مستحقات تحت التحصيل" value={data?.merchantReceivables.grandTotal} tone="muted" />
         </div>

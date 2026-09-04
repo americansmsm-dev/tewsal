@@ -21,11 +21,14 @@ interface CourierCash {
 interface Treasury {
   couriers: CourierCash[];
   accounts: {
+    branchCash: string;
     courierCashTotal: string;
     bank: string;
     vodafone: string;
     instapay: string;
+    wallets: string;
     suspense: string;
+    total: string;
   };
 }
 interface Deduction {
@@ -80,13 +83,26 @@ export default function TreasuryPage() {
           <button className="btn btn-primary" type="button" onClick={() => setDepositOpen(true)}>إيداع بنكي</button>
         </div>
 
-        {/* أرصدة الحسابات */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10, marginBottom: "1.5rem" }}>
-          <Stat label="كاش مع المناديب" value={data?.accounts.courierCashTotal} tone="warn" />
-          <Stat label="البنك" value={data?.accounts.bank} tone="success" />
-          <Stat label="فودافون كاش" value={data?.accounts.vodafone} />
-          <Stat label="إنستاباي" value={data?.accounts.instapay} />
-          <Stat label="زيادة معلّقة" value={data?.accounts.suspense} tone="muted" />
+        {/* إجمالي فلوس الشركة — الرقم الأهم */}
+        <div className="card" style={{ padding: "1rem 1.2rem", marginBottom: "0.9rem", minWidth: 0 }}>
+          <div style={{ fontSize: "0.8rem", color: "var(--muted)" }}>💰 إجمالي فلوس الشركة دلوقتي</div>
+          <div style={{ fontSize: "1.9rem", fontWeight: 800, color: "var(--color-orange-600)", lineHeight: 1.2, wordBreak: "break-word" }}>
+            {data?.accounts.total ?? "—"}
+          </div>
+          <div style={{ fontSize: "0.75rem", color: "var(--muted)", marginTop: 3 }}>
+            الخزنة + مع المناديب + البنك + المحافظ
+          </div>
+        </div>
+
+        {/* فلوسك فين بالظبط */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(150px, 100%), 1fr))", gap: 10, marginBottom: "1.5rem", minWidth: 0 }}>
+          <Stat label="🏢 كاش خزنة الشركة" value={data?.accounts.branchCash} tone="success" />
+          <Stat label="🛵 كاش مع المناديب" value={data?.accounts.courierCashTotal} tone="warn" />
+          <Stat label="🏦 الحساب البنكي" value={data?.accounts.bank} tone="success" />
+          <Stat label="📱 المحافظ (فودافون + إنستاباي)" value={data?.accounts.wallets} />
+          <Stat label="فودافون كاش" value={data?.accounts.vodafone} tone="muted" />
+          <Stat label="إنستاباي" value={data?.accounts.instapay} tone="muted" />
+          <Stat label="زيادة معلّقة (مش مضافة للإجمالي)" value={data?.accounts.suspense} tone="muted" />
         </div>
 
         <h3 style={{ fontSize: "1rem", margin: "0 0 0.75rem" }}>عهد المناديب</h3>
@@ -298,11 +314,15 @@ function HandoverModal({ courier, onClose, onDone }: { courier: CourierCash; onC
 }
 
 function Stat({ label, value, tone }: { label: string; value: string | undefined; tone?: "warn" | "success" | "muted" }) {
-  const color = tone === "warn" ? "var(--color-warning)" : tone === "success" ? "var(--color-success)" : tone === "muted" ? "var(--muted)" : "var(--text)";
+  // رقم سالب دايمًا أحمر — أخضر على رصيد بالسالب بيضلّل
+  const negative = !!value && /[-−]/.test(value);
+  const color = negative
+    ? "var(--color-danger)"
+    : tone === "warn" ? "var(--color-warning)" : tone === "success" ? "var(--color-success)" : tone === "muted" ? "var(--muted)" : "var(--text)";
   return (
-    <div className="card" style={{ padding: "0.9rem 1rem" }}>
+    <div className="card" style={{ padding: "0.9rem 1rem", minWidth: 0 }}>
       <div style={{ fontSize: "0.75rem", color: "var(--muted)", marginBottom: 4 }}>{label}</div>
-      <div style={{ fontSize: "1.25rem", fontWeight: 800, color }}>{value ?? "—"}</div>
+      <div style={{ fontSize: "1.25rem", fontWeight: 800, color, wordBreak: "break-word" }}>{value ?? "—"}</div>
     </div>
   );
 }
