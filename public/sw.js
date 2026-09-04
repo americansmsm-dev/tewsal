@@ -2,7 +2,10 @@
  * كاش خفيف للأصول عشان القشرة تفتح أوفلاين. البيانات نفسها
  * بتيجي من الشبكة، والتحولات الأوفلاين في outbox (localStorage).
  */
-const CACHE = "tewsal-shell-v1";
+/* ⚠️ غيّر رقم النسخة دي مع أي تعديل في الواجهة لازم يوصل فورًا —
+   تغييرها بيخلي المتصفح ينزّل service worker جديد، يمسح الكاش القديم
+   كله (في activate)، ويسيطر على الصفحات المفتوحة على طول. */
+const CACHE = "tewsal-shell-v2";
 const SHELL = ["/courier", "/manifest.webmanifest", "/icon.svg"];
 
 self.addEventListener("install", (e) => {
