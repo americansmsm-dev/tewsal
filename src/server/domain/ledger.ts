@@ -655,13 +655,15 @@ export function buildCommissionEntry(i: {
   courierId: string;
   deliveredCount: number;
   amountPerDeliveryP: Piastres;
+  /** مصدر القيد — افتراضي كشف المندوب؛ "manual" لما المحاسب يسجّلها بإيده */
+  sourceType?: "run_sheet" | "manual";
 }): DraftEntry {
   const total = i.amountPerDeliveryP * BigInt(i.deliveredCount);
   if (total <= 0n) throw new Error("مفيش عمولة تتقيّد");
 
   return entry({
     descriptionAr: `عمولة ${i.deliveredCount} شحنة`,
-    sourceType: "run_sheet",
+    sourceType: i.sourceType ?? "run_sheet",
     sourceId: i.runSheetId,
     kind: "commission",
     lines: [

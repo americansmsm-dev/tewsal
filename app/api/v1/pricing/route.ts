@@ -40,7 +40,14 @@ export async function GET(req: NextRequest) {
         FROM fee_definitions WHERE is_active = true ORDER BY code
       `)
     );
+    // عمولة المندوب لكل أوردر متسلّم — تكلفة على الشركة (مش على التاجر)
+    const commissionP = rowsOf<{ value: unknown }>(
+      await db.execute(sql`SELECT value FROM settings WHERE key = 'commission.default_per_delivery_p' LIMIT 1`)
+    )[0]?.value;
+    const cP = BigInt(typeof commissionP === "number" ? commissionP : Number(commissionP ?? 0) || 0);
+
     return ok({
+      commission: { valueP: cP.toString(), value: formatEGP(cP) },
       prices: prices.map((p) => ({ id: p.id, zone: p.zone, tier: p.tier, price: formatEGP(BigInt(p.price_p)), priceP: p.price_p })),
       fees: fees.map((f) => ({ id: f.id, code: f.code, nameAr: f.name_ar, calcType: f.calc_type, value: formatEGP(BigInt(f.value_p)), valueP: f.value_p, percentBp: f.percent_bp })),
     });
@@ -48,8 +55,8 @@ export async function GET(req: NextRequest) {
 }
 
 const schema = z.object({
-  kind: z.enum(["price", "fee"]),
-  id: z.string().uuid(),
+  kind: z.enum(["price", "fee", "commission"]),
+  id: z.string().uuid().optional(),
   value: z.string().regex(/^\d+(\.\d{1,2})?$/, "المبلغ لازم رقم"),
 });
 
@@ -60,6 +67,13 @@ export async function PATCH(req: NextRequest) {
     if (!parsed.success) return fail("BAD_REQUEST", parsed.error.issues[0]?.message ?? "بيانات غير صالحة", 400);
     const { kind, id, value } = parsed.data;
     const p = poundsToPiastres(value);
+    if (kind === "commission") {
+      await db.execute(sql`
+        UPDATE settings SET value = ${sql.raw(`'${p.toString()}'::jsonb`)}, updated_at = now()
+        WHERE key = 'commission.default_per_delivery_p'`);
+      return ok({ updated: true, value: formatEGP(p) });
+    }
+    if (!id) return fail("BAD_REQUEST", "معرّف ناقص", 400);
     if (kind === "price") {
       await db.execute(sql`UPDATE price_list_items SET price_p = ${p.toString()}::bigint WHERE id = ${id}::uuid`);
     } else {

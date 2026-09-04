@@ -12,7 +12,7 @@ import { apiCall } from "../lib/client";
 
 interface Price { id: string; zone: string; tier: string; price: string; priceP: string }
 interface Fee { id: string; code: string; nameAr: string; calcType: string; value: string; valueP: string; percentBp: number }
-interface Data { prices: Price[]; fees: Fee[] }
+interface Data { prices: Price[]; fees: Fee[]; commission: { value: string; valueP: string } }
 
 const TIER_LABEL: Record<string, string> = { t1: "t1 (أقل من ١٠٠)", t2: "t2 (١٠٠–٤٠٠)", t3: "t3 (أكتر من ٤٠٠)" };
 
@@ -55,6 +55,17 @@ export default function PricingPage() {
                   canEdit={canEdit} first={i === 0}
                   onSave={(v) => apiCall("PATCH", "/api/v1/pricing", { kind: "price", id: p.id, value: v }).then((r) => r.ok)} />
               ))}
+            </div>
+
+            <h3 style={{ fontSize: "1rem", margin: "0 0 0.3rem" }}>🛵 عمولة المندوب والسواق</h3>
+            <p style={{ color: "var(--muted)", fontSize: "0.8rem", margin: "0 0 0.6rem", lineHeight: 1.6 }}>
+              مبلغ ثابت بيتحسب للمندوب عن <b>كل أوردر بيتسلّم</b>. ده <b>تكلفة على الشركة</b> بتتخصم من إيرادك —
+              مالهاش أي علاقة بالتاجر ولا بحساب الأوردر.
+            </p>
+            <div className="card" style={{ padding: "0.5rem 0.9rem", marginBottom: "1.5rem" }}>
+              <EditRow label="عمولة المندوب لكل أوردر متسلّم" valueP={data.commission.valueP}
+                canEdit={canEdit} first
+                onSave={(v) => apiCall("PATCH", "/api/v1/pricing", { kind: "commission", value: v }).then((r) => r.ok)} />
             </div>
 
             <h3 style={{ fontSize: "1rem", margin: "0 0 0.6rem" }}>🧾 الرسوم</h3>

@@ -168,25 +168,12 @@ export async function closeRunSheet(
     `)
   )[0]!.n;
 
+  // ⚠️ قرار المالك: العمولة **مبتتقيّدش تلقائيًا** هنا.
+  //    الرقم ده **اقتراح** بس بيتخزّن للعرض — المحاسب هو اللي بيحاسب
+  //    المندوب من شاشة «عمولات المناديب» ويعدّل المبلغ قبل ما يتسجّل
+  //    في الدفتر. كده مفيش احتمال يتحسب مرتين.
   const perDelivery = await commissionPerDelivery(ex);
-  let commissionP: Piastres = 0n;
-
-  if (delivered > 0 && perDelivery > 0n) {
-    commissionP = perDelivery * BigInt(delivered);
-    const posted = await postEntry(
-      ex,
-      buildCommissionEntry({
-        runSheetId: input.runSheetId,
-        courierId: rs.courier_id,
-        deliveredCount: delivered,
-        amountPerDeliveryP: perDelivery,
-      }),
-      { actorUserId: input.actor.userId }
-    );
-    await ex.execute(sql`
-      UPDATE run_sheets SET commission_entry_id = ${posted.entryId}::uuid WHERE id = ${input.runSheetId}::uuid
-    `);
-  }
+  const commissionP: Piastres = delivered > 0 ? perDelivery * BigInt(delivered) : 0n;
 
   await ex.execute(sql`
     UPDATE run_sheets

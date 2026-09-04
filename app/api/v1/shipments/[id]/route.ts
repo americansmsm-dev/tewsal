@@ -82,6 +82,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       `)
     );
 
+    // عمولة المندوب لكل أوردر — تكلفة على الشركة (مالهاش علاقة بالتاجر)
+    const commRaw = rowsOf<{ value: unknown }>(
+      await db.execute(sql`SELECT value FROM settings WHERE key = 'commission.default_per_delivery_p' LIMIT 1`)
+    )[0]?.value;
+    const commissionP = BigInt(typeof commRaw === "number" ? commRaw : Number(commRaw ?? 0) || 0);
+
     const codP = BigInt((s.cod_amount_p as string) || "0");
     const priceP = BigInt((s.price_p as string) || "0");
     // ⚠️ total_fees_p **شامل سعر الشحن** (SHIPPING بند جوه الرسوم) — فمنطرحش الشحن تاني
@@ -103,6 +109,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         feesAmount: formatEGP(feesP),
         // صافي التاجر = التحصيل − إجمالي الرسوم (الرسوم شاملة الشحن)
         netAmount: formatEGP(netP),
+        courierCommission: formatEGP(commissionP),
+        courierCommissionP: commissionP.toString(),
       },
       items: items.map((it) => ({
         id: it.id, nameAr: it.name_ar, sku: it.sku, qty: it.qty,
