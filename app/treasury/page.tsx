@@ -23,7 +23,8 @@ interface Treasury {
   accounts: {
     branchCash: string;
     courierCashTotal: string;
-    bank: string;
+    bank: string;      // شامل الإنستاباي
+    bankOnly: string;
     vodafone: string;
     instapay: string;
     wallets: string;
@@ -90,7 +91,7 @@ export default function TreasuryPage() {
             {data?.accounts.total ?? "—"}
           </div>
           <div style={{ fontSize: "0.75rem", color: "var(--muted)", marginTop: 3 }}>
-            الخزنة + مع المناديب + البنك + المحافظ
+            الخزنة + مع المناديب + البنك (شامل إنستاباي) + فودافون كاش
           </div>
         </div>
 
@@ -98,10 +99,8 @@ export default function TreasuryPage() {
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(150px, 100%), 1fr))", gap: 10, marginBottom: "1.5rem", minWidth: 0 }}>
           <Stat label="🏢 كاش خزنة الشركة" value={data?.accounts.branchCash} tone="success" />
           <Stat label="🛵 كاش مع المناديب" value={data?.accounts.courierCashTotal} tone="warn" />
-          <Stat label="🏦 الحساب البنكي" value={data?.accounts.bank} tone="success" />
-          <Stat label="📱 المحافظ (فودافون + إنستاباي)" value={data?.accounts.wallets} />
-          <Stat label="فودافون كاش" value={data?.accounts.vodafone} tone="muted" />
-          <Stat label="إنستاباي" value={data?.accounts.instapay} tone="muted" />
+          <Stat label="🏦 الحساب البنكي (شامل إنستاباي)" value={data?.accounts.bank} tone="success" />
+          <Stat label="📱 فودافون كاش" value={data?.accounts.vodafone} />
           <Stat label="زيادة معلّقة (مش مضافة للإجمالي)" value={data?.accounts.suspense} tone="muted" />
         </div>
 

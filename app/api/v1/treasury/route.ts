@@ -64,18 +64,22 @@ export async function GET(req: NextRequest) {
 
     const courierTotal = couriers.reduce((s, c) => s + BigInt(c.balanceP), 0n);
 
-    const wallets = vodafone + instapay;
+    // الإنستاباي بينزل على نفس الحساب البنكي — فبنعرضهم بند واحد.
+    // (الحسابين فاضلين منفصلين في الدفتر عشان تعرف الفلوس دخلت منين.)
+    const bankTotal = bank + instapay;
+    const wallets = vodafone;
     // إجمالي فلوس الشركة في كل مكان.
     // ⚠️ الزيادة المعلّقة **مش بتتجمع** — هي التزام، والكاش بتاعها
     //    محسوب أصلًا جوّه كاش الخزنة (وإلا كنا هنعدّه مرتين).
-    const total = branchCash + courierTotal + bank + wallets;
+    const total = branchCash + courierTotal + bankTotal + wallets;
 
     return ok({
       couriers,
       accounts: {
         branchCash: formatEGP(branchCash),
         courierCashTotal: formatEGP(courierTotal),
-        bank: formatEGP(bank),
+        bank: formatEGP(bankTotal),
+        bankOnly: formatEGP(bank),
         vodafone: formatEGP(vodafone),
         instapay: formatEGP(instapay),
         wallets: formatEGP(wallets),
