@@ -33,6 +33,12 @@ services:
       R2_BUCKET: ${R2_BUCKET:-tewsal}
       WHATSAPP_TOKEN: ${WHATSAPP_TOKEN:-}
       WHATSAPP_PHONE_ID: ${WHATSAPP_PHONE_ID:-}
+      # تليجرام — تسليم النسخ الاحتياطية وتنبيهات التشغيل
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
+      # النسخ الاحتياطي — الوجهة المحلية وعدد النسخ المحتفظ بيها
+      BACKUP_DIR: ${BACKUP_DIR:-/backups}
+      BACKUP_RETAIN: ${BACKUP_RETAIN:-28}
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3000/api/health"]
       interval: 30s

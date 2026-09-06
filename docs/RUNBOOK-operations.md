@@ -15,14 +15,25 @@
 # التقرير اليومي — كل يوم ٧ الصبح (بيتبعت واتساب لو WHATSAPP_TOKEN+PHONE_ID+REPORT_PHONE متضبطين)
 0 7 * * *   cd /app && DATABASE_URL="$DATABASE_URL" npm run daily-report  >> /var/log/tewsal-daily.log 2>&1
 
-# نسخة احتياطية + بروفة استرجاع + رفع خارجي على R2 — كل يوم ٣ الفجر
-0 3 * * *   cd /app && DATABASE_URL="$DATABASE_URL" BACKUP_DIR=/backups npx tsx scripts/backup.ts --verify --upload  >> /var/log/tewsal-backup.log 2>&1
+# نسخة احتياطية كاملة — **كل ١٢ ساعة** (٣ الفجر و٣ العصر بتوقيت القاهرة)
+# ٣ وجهات: السيرفر + R2 + قناة تليجرام
+0 3,15 * * *   cd /app && DATABASE_URL="$DATABASE_URL" BACKUP_DIR=/backups npx tsx scripts/backup.ts --verify --upload --telegram  >> /var/log/tewsal-backup.log 2>&1
 ```
 
-- `--verify` بيسترجع النسخة في قاعدة مؤقتة ويتأكد إن الدفتر متوازن (فرق = صفر) — عشان النسخة مش «فاسدة».
+> على Coolify: اعملها **Scheduled Task** على حاوية التطبيق بنفس الأمر (سيب خانة Container فاضية) بدل `crontab`.
+
+- `--verify` بيسترجع النسخة في قاعدة مؤقتة ويتأكد إن **جدول المستخدمين اترجع** و**الدفتر متوازن** (فرق = صفر) — يعني بنثبت كل ١٢ ساعة إن النسخة **قابلة للاسترجاع فعلًا**، مش بس اتاخدت.
 - `--upload` بيرفع النسخة على R2 تحت `db-backups/` (محتاج `R2_ACCOUNT_ID` و`R2_ACCESS_KEY_ID` و`R2_SECRET_ACCESS_KEY` و`R2_BUCKET`).
-- `BACKUP_RETAIN` (افتراضي ١٤) بيحدد كام نسخة محلية نحتفظ بيها.
+- `--telegram` بيبعت **الملف نفسه** على القناة لو أقل من ٤٥ ميجا، وإلا بيبعت **ملخّص + مكان النسخة على R2** (محتاج `TELEGRAM_BOT_TOKEN` و`TELEGRAM_CHAT_ID`؛ البوت لازم يكون **مشرف** في القناة).
+- `BACKUP_RETAIN` (افتراضي **٢٨**) = عدد النسخ المحلية. على إيقاع كل ١٢ ساعة ده **١٤ يوم**.
+- **أي فشل بيتبعت كتنبيه على تليجرام** والخروج بكود ١ — السكوت مايتقريش نجاح.
+- ⚠️ **`pg_dump` لازم يكون متسطّب في الحاوية** — الـ `Dockerfile` بيسطّب `postgresql16-client` في مرحلة التشغيل.
 - **نسخة تانية على VPS B**: زوّد سطر `rsync`/`scp` للـ `/backups` على السيرفر التاني، أو خلي VPS B يسحب من R2.
+
+### تشغيل يدوي للتجربة
+```bash
+npm run backup:full     # = --verify --upload --telegram
+```
 
 ---
 

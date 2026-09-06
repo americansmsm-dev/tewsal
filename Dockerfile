@@ -28,6 +28,7 @@ WORKDIR /app
 
 # ⚠️ توقيت القاهرة — عشان الكرون والتقارير تتطابق مع حدس المالك
 RUN apk add --no-cache tzdata curl && \
+    (apk add --no-cache postgresql16-client || apk add --no-cache postgresql-client) && \
     cp /usr/share/zoneinfo/Africa/Cairo /etc/localtime && \
     echo "Africa/Cairo" > /etc/timezone
 ENV TZ=Africa/Cairo
