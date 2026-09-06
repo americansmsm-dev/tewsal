@@ -26,7 +26,8 @@ async function api(method: string, path: string, body?: unknown) {
 async function main() {
   const sql = postgres(process.env.DATABASE_URL ?? "postgres://postgres@127.0.0.1:55432/tewsal", { max: 1 });
   const stamp = Date.now();
-  const PHONE = "01" + String(stamp).slice(-9);
+  // ⚠️ لازم بادئة مصرية صحيحة (010/011/012/015) وإلا التحقق بيرفض
+  const PHONE = "010" + String(stamp).slice(-8);
   try {
     const [gov] = await sql<{ id: string }[]>`SELECT id FROM governorates WHERE code='CAI'`;
     const [zone] = await sql<{ id: string }[]>`SELECT id FROM zones WHERE code='cairo_giza'`;

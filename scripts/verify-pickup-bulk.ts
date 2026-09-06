@@ -8,7 +8,9 @@
 import postgres from "postgres";
 
 const DB = process.env.DATABASE_URL ?? "postgres://postgres@127.0.0.1:54320/tewsal";
-const BASE = process.env.BASE_URL ?? "http://127.0.0.1:3100";
+// ⚠️ باقي السكربتات بتستخدم BASE — الاسم المختلف كان بيخلّي ده
+//    يكلّم سيرفر تاني على قاعدة تانية بصمت (محافظة مش موجودة).
+const BASE = process.env.BASE ?? process.env.BASE_URL ?? "http://127.0.0.1:3100";
 const c = postgres(DB, { max: 1 });
 
 let pass = 0, fail = 0;
@@ -63,7 +65,8 @@ async function main() {
   await c`UPDATE users SET is_active = false WHERE id = ${offId}::uuid`;
 
   // ٥ أوردرات
-  const [gov] = await c`SELECT governorate_id FROM shipments WHERE cod_amount_p > 0 ORDER BY created_at DESC LIMIT 1`;
+  // ⚠️ كان بياخد المحافظة من شحنة موجودة قبله — بيفشل على قاعدة نضيفة
+  const [gov] = await c`SELECT id AS governorate_id FROM governorates WHERE code='CAI'`;
   const ids: string[] = [];
   for (let i = 0; i < 5; i++) {
     const s = await api("POST", "/api/v1/shipments", {

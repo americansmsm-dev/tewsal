@@ -352,10 +352,17 @@ async function moneySetting(ex: SqlExecutor, key: string, fallback: bigint): Pro
     await ex.execute(sql`SELECT value FROM settings WHERE key = ${key} LIMIT 1`)
   );
   const v = rows[0]?.value;
+  // الإعداد مش موجود = طبيعي (لسه ماتظبطش) → الافتراضي
   if (v === undefined || v === null) return fallback;
   try {
     return BigInt(typeof v === "number" ? Math.round(v) : String(v));
   } catch {
-    return fallback;
+    // ⚠️ الإعداد موجود بس قيمته بايظة — ده في كود فلوس، والرجوع
+    //    للافتراضي **بصمت** ممكن يدفع مبلغ غلط. نصرخ بدل ما نخمّن.
+    throw new HttpError(
+      500,
+      "BAD_SETTING",
+      `قيمة الإعداد «${key}» بايظة — صلّحها من الإعدادات قبل ما تكمّل التسوية`
+    );
   }
 }

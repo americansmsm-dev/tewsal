@@ -49,8 +49,8 @@ async function main() {
     const merchantBId = mB.json.merchant.id as string;
 
     // المدير يعمل شحنة لكل تاجر
-    await admin("POST", "/api/v1/shipments", { merchantId: merchantAId, recipientName: "ع", recipientPhone: "01012345678", governorateId: gov!.id, addressLine: "المعادي", confirm: true });
-    await admin("POST", "/api/v1/shipments", { merchantId: merchantBId, recipientName: "س", recipientPhone: "01087654321", governorateId: gov!.id, addressLine: "مصر الجديدة", confirm: true });
+    await admin("POST", "/api/v1/shipments", { merchantId: merchantAId, recipientName: "ع", recipientPhone: "01012345678", governorateId: gov!.id, addressLine: "المعادي", codAmount: "500", confirm: true });
+    await admin("POST", "/api/v1/shipments", { merchantId: merchantBId, recipientName: "س", recipientPhone: "01087654321", governorateId: gov!.id, addressLine: "مصر الجديدة", codAmount: "500", confirm: true });
 
     // دخول التاجر أ بحسابه
     const merchant = client();

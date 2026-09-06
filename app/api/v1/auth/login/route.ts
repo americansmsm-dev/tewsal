@@ -15,7 +15,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/server/db";
-import { verifyPassword } from "@/server/auth/password";
+import { verifyPasswordDetailed } from "@/server/auth/password";
 import { createSession, SESSION_COOKIE } from "@/server/auth/session";
 import { checkTwoFactorAtLogin } from "@/server/services/security";
 import { normalizeEgyptMobile } from "@/lib/phone";
@@ -91,17 +91,21 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const okPassword = await verifyPassword(user.password_hash, parsed.data.password);
-    if (!okPassword) {
-      const failures = user.failed_login_count + 1;
-      const lock = failures >= MAX_FAILURES;
-      await db.execute(sql`
-        UPDATE users SET
-          failed_login_count = ${failures},
-          locked_until = ${lock ? sql`now() + (${LOCK_MINUTES} * interval '1 minute')` : sql`locked_until`}
-        WHERE id = ${user.id}::uuid
-      `);
-      await recordAttempt(false, "bad_password");
+    const pw = await verifyPasswordDetailed(user.password_hash, parsed.data.password);
+    if (!pw.ok) {
+      // ⚠️ الهاش التالف مشكلة سيرفر مش محاولة تخمين — فمابنزوّدش
+      //    عدّاد المحاولات عشان مانقفلش حساب بسبب غلطة عندنا.
+      if (!pw.hashError) {
+        const failures = user.failed_login_count + 1;
+        const lock = failures >= MAX_FAILURES;
+        await db.execute(sql`
+          UPDATE users SET
+            failed_login_count = ${failures},
+            locked_until = ${lock ? sql`now() + (${LOCK_MINUTES} * interval '1 minute')` : sql`locked_until`}
+          WHERE id = ${user.id}::uuid
+        `);
+      }
+      await recordAttempt(false, pw.hashError ? "hash_error" : "bad_password");
       return INVALID();
     }
 

@@ -116,9 +116,6 @@ export async function POST(
     const ctx = await requireUser(req);
 
     // المندوب ملوش لازمة يبعت لوحة الإدارة — بس ده بيتفلتر في canTransition
-    if (ctx.user.role === "merchant") {
-      // التاجر بيغيّر حالات محدودة جدًا (إلغاء المسودة) — نسيبها للبوابة
-    }
 
     const raw = await req.json().catch(() => null);
     const parsed = bodySchema.safeParse(raw);

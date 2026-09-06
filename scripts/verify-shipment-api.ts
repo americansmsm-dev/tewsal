@@ -69,8 +69,10 @@ async function main() {
     check("   رجع AWB", typeof ship.json?.awb === "string", true);
     const awb = ship.json?.awb as string;
     const shipmentId = ship.json?.id as string;
-    // الرسوم: شحن ٨٠ + تحصيل (١٠٠ + ١٪×٧٣٥٠=٧٣.٥٠) = ٢٥٣.٥٠
-    check("   إجمالي الرسوم ٢٥٣.٥٠ ج", ship.json?.totalFees, "253.50 ج");
+    // ⚠️ رسم التحصيل بقى بيتخصم **مرة واحدة أسبوعيًا** على إجمالي
+    //    الفاتورة عند التسوية (قرار المالك) — مش على كل أوردر.
+    //    فرسوم الأوردر عند الإنشاء = الشحن بس (٨٠ ج).
+    check("   إجمالي الرسوم ٨٠ ج (شحن — رسم التحصيل عند التسوية)", ship.json?.totalFees, "80.00 ج");
 
     // شحنة بتحصيل لمحافظة التحصيل فيها مقفول → 422
     const noCod = await api("POST", "/api/v1/shipments", {
@@ -91,11 +93,11 @@ async function main() {
     const ref = "ORD-777";
     await api("POST", "/api/v1/shipments", {
       merchantId, recipientName: "ع", recipientPhone: "01012345678",
-      governorateId: gov!.id, addressLine: "المعادي", merchantReference: ref,
+      governorateId: gov!.id, addressLine: "المعادي", merchantReference: ref, codAmount: "500",
     });
     const dupRef = await api("POST", "/api/v1/shipments", {
       merchantId, recipientName: "ع", recipientPhone: "01012345678",
-      governorateId: gov!.id, addressLine: "المعادي", merchantReference: ref,
+      governorateId: gov!.id, addressLine: "المعادي", merchantReference: ref, codAmount: "500",
     });
     check("٧) رقم أوردر مكرر → 409", dupRef.status, 409);
     check("   كود DUPLICATE_REFERENCE", dupRef.json?.error?.code, "DUPLICATE_REFERENCE");
@@ -155,7 +157,8 @@ async function main() {
       FROM journal_lines jl JOIN journal_entries je ON je.id = jl.entry_id
       WHERE je.source_id = ${shipmentId}::uuid AND je.kind = 'delivery'`;
     check("١٥) القيد متوازن", entry!.debit, entry!.credit);
-    check("   إجمالي القيد ٧٦٠٣.٥٠ ج (شحن ٨٠ + تحصيل ١٧٣.٥٠)", entry!.debit, "760350");
+    // رسم التحصيل بقى عند التسوية — القيد = التحصيل ٧٣٥٠ + الشحن ٨٠
+    check("   إجمالي القيد ٧٤٣٠ ج (تحصيل + شحن)", entry!.debit, "743000");
 
     console.log("\n" + "─".repeat(50));
     console.log(fail === 0 ? `✅ كل فحوصات دورة الشحنة نجحت (${pass})` : `❌ ${fail} فشل · ${pass} نجح`);

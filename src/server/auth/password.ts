@@ -27,15 +27,30 @@ export async function hashPassword(plain: string): Promise<string> {
   return hash(plain, OPTIONS);
 }
 
+export interface PasswordCheck {
+  /** الباسورد صح؟ */
+  ok: boolean;
+  /** الهاش المخزَّن نفسه تالف/بصيغة مش مفهومة (مشكلة سيرفر مش مستخدم) */
+  hashError: boolean;
+}
+
 /**
- * التحقق من كلمة المرور.
- * بيرجّع false لو الهاش تالف بدل ما يرمي — عشان محاولة
- * دخول بهاش قديم متكسرش السيستم.
+ * التحقق التفصيلي من كلمة المرور.
+ *
+ * ⚠️ بيفرّق بين «الباسورد غلط» و«الهاش المخزَّن تالف». الاتنين
+ *    بيرجّعوا فشل للمستخدم (مفيش تسريب معلومات)، بس السبب
+ *    بيتسجّل في login_attempts عشان تعرف المشكلة فين — قبل كده
+ *    الاتنين كانوا شكل واحد ومفيش أي أثر.
  */
-export async function verifyPassword(hashed: string, plain: string): Promise<boolean> {
+export async function verifyPasswordDetailed(hashed: string, plain: string): Promise<PasswordCheck> {
   try {
-    return await verify(hashed, plain);
+    return { ok: await verify(hashed, plain), hashError: false };
   } catch {
-    return false;
+    return { ok: false, hashError: true };
   }
+}
+
+/** التحقق البسيط — بيرجّع false لو الهاش تالف بدل ما يرمي. */
+export async function verifyPassword(hashed: string, plain: string): Promise<boolean> {
+  return (await verifyPasswordDetailed(hashed, plain)).ok;
 }

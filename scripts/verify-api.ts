@@ -137,7 +137,9 @@ async function main() {
       FROM journal_lines jl JOIN journal_entries je ON je.id = jl.entry_id
       WHERE je.source_id = ${SHIP}::uuid AND je.kind = 'delivery'`;
     check("٨) القيد في القاعدة متوازن", entry!.debit, entry!.credit);
-    check("   إجمالي القيد ٧٦٢٣.٥٠ ج", entry!.debit, "762350");
+    // رسم التحصيل بقى بيتقيّد عند **التسوية** (مرة أسبوعيًا على الإجمالي)
+    // مش على كل أوردر — فقيد التسليم = التحصيل + الشحن بس.
+    check("   إجمالي القيد ٧٤٥٠ ج (تحصيل + شحن، من غير رسم التحصيل)", entry!.debit, "745000");
 
     // إعادة نفس الحدث → 200 ack صامت
     const replay = await api(`/api/v1/shipments/${SHIP}/transitions`, {

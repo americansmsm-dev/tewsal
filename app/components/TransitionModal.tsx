@@ -65,7 +65,17 @@ export function TransitionModal({
   // ⚠️ إسناد الاستلام مش من هنا — بيتعمل من «الاستلام الجماعي» عشان
   //    أوردرات التاجر تتجمّع في استلام حقيقي واحد على مندوب واحد.
   //    (قبل كده كان بيتولّد مرجع استلام وهمي لكل أوردر — مجموعة مفكّكة.)
-  const options = allowedTransitions(currentStatus, role).filter((o) => o.to !== "pickup_assigned");
+  // ⚠️ الخطوات اللي بتحتاج **كشف حقيقي** بتتعمل من شاشاتها عشان
+  //    الأوردرات تتجمّع على مندوب واحد بمرجع حقيقي:
+  //      pickup_assigned  → شاشة «الاستلام» (استلام جماعي)
+  //      out_for_delivery → شاشة «الكشوف»
+  //      out_for_return   → شاشة «المرتجعات» (تحميل على مندوب)
+  //    قبل كده كان المودال بيولّد مرجع عشوائي بـ crypto.randomUUID()
+  //    فالأوردرات ما كانتش بتتجمّع في كشف حقيقي أصلًا.
+  const SHEET_STEPS = new Set(["pickup_assigned", "out_for_delivery", "out_for_return"]);
+  const allSteps = allowedTransitions(currentStatus, role);
+  const options = allSteps.filter((o) => !SHEET_STEPS.has(o.to));
+  const hiddenSteps = allSteps.filter((o) => SHEET_STEPS.has(o.to));
   const [toStatus, setToStatus] = useState<ShipmentStatus | "">("");
   const [couriers, setCouriers] = useState<Courier[]>([]);
   const [reasons, setReasons] = useState<ReasonCode[]>([]);
@@ -102,7 +112,9 @@ export function TransitionModal({
 
   const chosen = options.find((o) => o.to === toStatus);
   const requires = chosen?.requires ?? [];
-  const showPhoto = !!toStatus && PHOTO_STATES.has(toStatus as ShipmentStatus);
+  /** الخطوة دي بتطلب توقيع/إثبات استلام؟ (زي تسليم المرتجع للتاجر) */
+  const signatureRequired = requires.includes("signature");
+  const showPhoto = (!!toStatus && PHOTO_STATES.has(toStatus as ShipmentStatus)) || signatureRequired;
 
   async function onPickPhoto(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -137,13 +149,21 @@ export function TransitionModal({
   }, [shipmentId]);
 
   const isPickup = toStatus === "picked_up";
-  const photoRequired = !!toStatus && PHOTO_REQUIRED.has(toStatus as ShipmentStatus);
+  // ⚠️ أي خطوة بتطلب توقيع لازم صورة حقيقية — ممنوع نبعت إثبات وهمي
+  const photoRequired =
+    (!!toStatus && PHOTO_REQUIRED.has(toStatus as ShipmentStatus)) || signatureRequired;
 
   async function submit() {
     if (!toStatus) return;
     // 📷 الصورة إجبارية: تصوير الأوردر عند الاستلام من التاجر وعند التسليم للعميل
     if (photoRequired && !photoKey) {
-      setError(isPickup ? "لازم تصوّر الأوردر قبل ما تأكّد الاستلام 📷" : "لازم تصوّر إثبات التسليم قبل ما تسلّم الأوردر 📷");
+      setError(
+        isPickup
+          ? "لازم تصوّر الأوردر قبل ما تأكّد الاستلام 📷"
+          : signatureRequired
+            ? "لازم تصوّر إثبات الاستلام/التوقيع قبل التأكيد 📷"
+            : "لازم تصوّر إثبات التسليم قبل ما تسلّم الأوردر 📷"
+      );
       return;
     }
     // 🧑‍✈️ خطوات الإسناد لازم تختار مندوب — عشان الشغل ميروحش لحد
@@ -169,9 +189,6 @@ export function TransitionModal({
     }
     if (note) body.note = note;
     if (receiverName) body.receiverName = receiverName;
-    // إسناد الاستلام اتشال من هنا (بيتعمل من «الاستلام الجماعي» باستلام حقيقي).
-    // TODO: كشف التوصيل لسه بيولّد مرجع مؤقت — يتنقل لنفس النمط عبر /run-sheets.
-    if (requires.includes("run_sheet")) body.runSheetId = crypto.randomUUID();
     if (courierId) {
       body.courierId = courierId;
     } else if (currentCourierId && requires.includes("cod_amount")) {
@@ -179,8 +196,10 @@ export function TransitionModal({
     }
     // صورة الإثبات لو المندوب صوّرها (بتتربط بالشحنة كمرفق)
     if (photoKey) body.photoUrl = photoKey;
-    // التوقيع: لو فيه صورة إثبات نستخدمها، وإلا مؤقت لحد ما نعمل لوحة توقيع
-    if (requires.includes("signature")) body.signatureUrl = photoKey ?? "pending://signature";
+    // ⚠️ التوقيع = صورة الإثبات الحقيقية. زمان كان بيتبعت نص ثابت
+    //    ("pending://signature") لو مفيش صورة — يعني إثبات مزيّف على
+    //    خطوة مالية. دلوقتي الصورة إجبارية فوق (photoRequired).
+    if (signatureRequired && photoKey) body.signatureUrl = photoKey;
     // idempotency — نفس الحدث مش هيتكرر حتى لو اتزامن أكتر من مرة
     body.deviceEventId = crypto.randomUUID();
 
@@ -189,11 +208,19 @@ export function TransitionModal({
       setBusy(false);
       if (r.ok) onDone();
       else setError(r.error?.message ?? "فشل الإجراء");
-    } catch {
-      // النت مقطوع — نخزّن التحول ويتزامن لما النت يرجع
-      queueTransition(shipmentId, body);
+    } catch (err) {
+      // ⚠️ لازم نفرّق: «النت مقطوع» نخزّنه ويتزامن بعدين، لكن أي خطأ
+      //    تاني **لازم يبان للمندوب**. قبل كده أي فشل كان بيتحط في
+      //    الطابور ويوري «تمام» — يعني غلطة حقيقية تتقري نجاح.
+      const isOffline = typeof navigator !== "undefined" && navigator.onLine === false;
+      const isNetworkError = err instanceof TypeError; // fetch بيرمي TypeError لما الشبكة تفشل
       setBusy(false);
-      onDone();
+      if (isOffline || isNetworkError) {
+        queueTransition(shipmentId, body);
+        onDone();
+        return;
+      }
+      setError(err instanceof Error ? err.message : "حصل خطأ غير متوقع — حاول تاني");
     }
   }
 
@@ -219,6 +246,20 @@ export function TransitionModal({
       </div>
 
       <label className="label">الإجراء</label>
+      {hiddenSteps.length > 0 && (
+        <div style={{
+          fontSize: "0.75rem", color: "var(--muted)", lineHeight: 1.7,
+          background: "var(--bg-soft)", border: "1px solid var(--border)",
+          borderRadius: 10, padding: "0.5rem 0.7rem", marginBottom: 8,
+        }}>
+          ℹ️ {hiddenSteps.map((o) => o.label).join(" · ")} —
+          بتتعمل من شاشتها بتحديد أوردرات كتير على مندوب واحد
+          {hiddenSteps.some((o) => o.to === "pickup_assigned") && " (شاشة الاستلام)"}
+          {hiddenSteps.some((o) => o.to === "out_for_delivery") && " (شاشة الكشوف)"}
+          {hiddenSteps.some((o) => o.to === "out_for_return") && " (شاشة المرتجعات)"}
+          .
+        </div>
+      )}
       <select
         className="input"
         value={toStatus}

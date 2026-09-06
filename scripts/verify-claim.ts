@@ -47,7 +47,7 @@ async function main() {
     async function makeShipment(declaredP: bigint, fragile: boolean, insured: boolean): Promise<string> {
       const s = await api("POST", "/api/v1/shipments", {
         merchantId, recipientName: "ع", recipientPhone: "01012345678",
-        governorateId: gov!.id, addressLine: "المعادي", confirm: true,
+        governorateId: gov!.id, addressLine: "المعادي", codAmount: "500", confirm: true,
       });
       const id = s.json.id as string;
       // نضبط القيمة المعلنة وحالة القابل للكسر مباشرة (حقول الشحنة قابلة للتعديل)

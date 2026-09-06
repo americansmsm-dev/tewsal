@@ -77,12 +77,15 @@ export default function CourierApp() {
     setLoading(false);
   }, []);
 
-  async function attend(action: "check_in" | "check_out") {
+  // useCallback عشان تفضل ثابتة وتقدر تدخل في deps بتاعة التتبّع
+  // (قبل كده كانت بتتعمل كل رندر فاضطرينا نعطّل exhaustive-deps
+  //  وده بيسيب احتمال closure قديمة في حلقة الـ ping)
+  const attend = useCallback(async (action: "check_in" | "check_out") => {
     const r = await apiCall("POST", "/api/v1/courier/field", { action });
     if (!r.ok) { setNotice(r.error?.message ?? "تعذّر تنفيذ العملية"); return; }
     setNotice(null);
     load();
-  }
+  }, [load]);
 
   useEffect(() => {
     async function sync() { const n = await flushOutbox(); setPending(outboxCount()); if (n > 0) load(); }
@@ -109,8 +112,7 @@ export default function CourierApp() {
     ping();
     const iv = setInterval(ping, 120000);
     return () => clearInterval(iv);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [att?.checkedIn, att?.checkedOut, work?.start, work?.end, work?.autoCheckout]);
+  }, [att?.checkedIn, att?.checkedOut, work, attend]);
 
   useEffect(() => {
     apiCall<{ user: Me }>("GET", "/api/v1/auth/me").then((r) => {

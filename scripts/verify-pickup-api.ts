@@ -44,13 +44,13 @@ async function main() {
     check("١) دخول", (await api("POST", "/api/v1/auth/login", { username: "admin", password: "Admin12345" })).status, 200);
 
     const code = `M-PK-${Date.now() % 100000}`;
-    const merchantId = (await api("POST", "/api/v1/merchants", { code, nameAr: "تاجر الاستلام", tier: "t1", codEnabled: false })).json.merchant.id;
+    const merchantId = (await api("POST", "/api/v1/merchants", { code, nameAr: "تاجر الاستلام", tier: "t1" })).json.merchant.id;
 
     // نعمل ٣ شحنات في انتظار الاستلام
     async function makeAwaiting() {
       const s = await api("POST", "/api/v1/shipments", {
         merchantId, recipientName: "ع", recipientPhone: "01012345678",
-        governorateId: gov!.id, addressLine: "المعادي", confirm: true,
+        governorateId: gov!.id, addressLine: "المعادي", codAmount: "500", confirm: true,
       });
       return s.json.id as string;
     }

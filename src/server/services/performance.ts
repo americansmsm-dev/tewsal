@@ -151,15 +151,24 @@ export async function merchantProfitability(ex: SqlExecutor): Promise<MerchantPr
           COUNT(*) FILTER (WHERE status IN ('lost','damaged','disposed'))::int AS lost
         FROM shipments GROUP BY merchant_id
       ),
-      -- إيراد الشركة من التاجر: كل سطر إيراد في قيد بيلمس مستحقات التاجر
-      -- (بيلقط رسوم التسليم لكل أوردر + رسم التحصيل الأسبوعي عند التسوية)
+      -- ⚠️ قيد التسليم بيلمس «مستحقات التاجر» **مرتين** (دائن بالتحصيل
+      --    ومدين بالرسوم). لو عملنا JOIN مباشر على سطور المستحقات،
+      --    كل سطر إيراد بيتضاعف. عشان كده بنعمل خريطة **فريدة**
+      --    (قيد → تاجر) الأول، وبعدين نجمع الإيراد عليها.
+      entry_merchant AS (
+        SELECT DISTINCT jlm.entry_id, a2.owner_id AS merchant_id
+        FROM journal_lines jlm
+        JOIN accounts a2 ON a2.id = jlm.account_id AND a2.code = 'MERCHANT_PAYABLE'
+        WHERE a2.owner_id IS NOT NULL
+      ),
+      -- إيراد الشركة من التاجر: رسوم التسليم لكل أوردر + رسم التحصيل
+      -- الأسبوعي اللي بيتقيّد عند التسوية (مالوش shipment_id)
       rev AS (
-        SELECT a2.owner_id AS merchant_id, SUM(jl.credit_p - jl.debit_p) AS revenue
+        SELECT em.merchant_id, SUM(jl.credit_p - jl.debit_p) AS revenue
         FROM journal_lines jl
         JOIN accounts a ON a.id = jl.account_id AND a.type = 'revenue'
-        JOIN journal_lines jlm ON jlm.entry_id = jl.entry_id
-        JOIN accounts a2 ON a2.id = jlm.account_id AND a2.code = 'MERCHANT_PAYABLE'
-        GROUP BY a2.owner_id
+        JOIN entry_merchant em ON em.entry_id = jl.entry_id
+        GROUP BY em.merchant_id
       ),
       -- عمولات المناديب على أوردرات التاجر (من جدول بنود العمولة)
       comm AS (

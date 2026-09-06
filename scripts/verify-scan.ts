@@ -47,7 +47,7 @@ async function main() {
     // شحنة → picked_up
     const shipmentId = (await api("POST", "/api/v1/shipments", {
       merchantId, recipientName: "منى", recipientPhone: "01012345678",
-      governorateId: gov!.id, addressLine: "المعادي", confirm: true,
+      governorateId: gov!.id, addressLine: "المعادي", codAmount: "500", confirm: true,
     })).json.id as string;
     const awb = (await sql<{ awb: string }[]>`SELECT awb FROM shipments WHERE id=${shipmentId}::uuid`)[0]!.awb;
     const tr = (b: unknown) => api("POST", `/api/v1/shipments/${shipmentId}/transitions`, b);

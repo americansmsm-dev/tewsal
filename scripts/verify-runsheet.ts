@@ -87,14 +87,20 @@ async function main() {
     check("٦) قفل الكشف → مسلَّم 1", close.json.deliveredCount, 1);
     check("   عمولة ٥٠ ج", close.json.commission, "50.00 ج");
 
-    // القيد متوازن ونوعه commission على الكشف
+    // ⚠️ قرار المالك: العمولة **مبتتقيّدش تلقائيًا** عند قفل الكشف —
+    //    الرقم اللي فوق اقتراح بيتخزّن للعرض بس، والمحاسب هو اللي
+    //    بيسجّل العمولة من شاشة «عمولات المناديب» بعد ما يراجع المبلغ.
+    //    فالمفروض **مفيش** قيد commission على الكشف ده.
     const [entry] = await sql<{ n: number; debit: string; credit: string }[]>`
       SELECT count(*)::int AS n,
              COALESCE(SUM(jl.debit_p),0)::text AS debit, COALESCE(SUM(jl.credit_p),0)::text AS credit
       FROM journal_entries je JOIN journal_lines jl ON jl.entry_id = je.id
       WHERE je.source_id = ${runSheetId}::uuid AND je.kind = 'commission'`;
-    check("٧) قيد العمولة متوازن", entry!.debit, entry!.credit);
-    check("   إجمالي القيد ٥٠ ج", entry!.debit, "5000");
+    check("٧) ⭐ مفيش قيد عمولة تلقائي عند القفل (اقتراح بس)", entry!.n, 0);
+    // والمبلغ المقترح متخزّن على الكشف نفسه للعرض
+    const [sheetRow] = await sql<{ commission_p: string }[]>`
+      SELECT commission_p::text FROM run_sheets WHERE id = ${runSheetId}::uuid`;
+    check("   الاقتراح متخزّن على الكشف (٥٠ ج)", sheetRow!.commission_p, "5000");
 
     // إغلاق تاني → مفيش عمولة مكررة (القيد اتقيّد مرة واحدة)
     const close2 = await api("POST", `/api/v1/run-sheets/${runSheetId}/close`);
