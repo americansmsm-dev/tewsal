@@ -12,7 +12,7 @@ import { sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/server/db";
 import { poundsToPiastres, formatEGP } from "@/lib/money";
-import { pendingOrders, couriersWithPending, suggestedRate, recordCommission } from "@/server/services/courierCommission";
+import { pendingOrders, couriersWithPending, suggestedRate, suggestedReturnRate, recordCommission } from "@/server/services/courierCommission";
 import { notifyCommission } from "@/server/services/inappNotify";
 import { requireRole } from "@/server/http/context";
 import { ok, fail, handleError } from "@/server/http/respond";
@@ -31,21 +31,34 @@ export async function GET(req: NextRequest) {
     await requireRole(req, FINANCE);
     const courierId = new URL(req.url).searchParams.get("courierId");
     const rateP = await suggestedRate(db);
+    const returnRateP = await suggestedReturnRate(db);
 
     if (!courierId) {
       const couriers = await couriersWithPending(db);
-      return ok({ couriers, suggestedRateP: rateP.toString(), suggestedRate: formatEGP(rateP) });
+      return ok({
+        couriers,
+        suggestedRateP: rateP.toString(), suggestedRate: formatEGP(rateP),
+        suggestedReturnRateP: returnRateP.toString(), suggestedReturnRate: formatEGP(returnRateP),
+      });
     }
     if (!z.string().uuid().safeParse(courierId).success) {
       return fail("BAD_REQUEST", "معرّف المندوب غير صالح", 400);
     }
     const orders = await pendingOrders(db, courierId);
+    // المرتجع بسعره والتسليم بسعره — الاقتراح بيجمع الاتنين
+    const returns = orders.filter((o) => o.kind === "return").length;
+    const deliveries = orders.length - returns;
+    const suggestedTotalP = rateP * BigInt(deliveries) + returnRateP * BigInt(returns);
     return ok({
       orders,
       count: orders.length,
+      deliveries,
+      returns,
       suggestedRateP: rateP.toString(),
       suggestedRate: formatEGP(rateP),
-      suggestedTotal: formatEGP(rateP * BigInt(orders.length)),
+      suggestedReturnRateP: returnRateP.toString(),
+      suggestedReturnRate: formatEGP(returnRateP),
+      suggestedTotal: formatEGP(suggestedTotalP),
     });
   } catch (err) { return handleError(err); }
 }
@@ -55,6 +68,8 @@ const schema = z.object({
   shipmentIds: z.array(z.string().uuid()).min(1).max(1000),
   /** المبلغ لكل أوردر — المحاسب بيحدده (الاقتراح مجرد قيمة ابتدائية) */
   amountPerOrder: z.string().regex(/^\d+(\.\d{1,2})?$/, "المبلغ لازم رقم"),
+  /** سعر المرتجع — اختياري؛ لو مش متبعت بيتحسب بسعر التسليم */
+  amountPerReturn: z.string().regex(/^\d+(\.\d{1,2})?$/, "مبلغ المرتجع لازم رقم").optional(),
   note: z.string().max(300).nullable().optional(),
 });
 
@@ -63,13 +78,14 @@ export async function POST(req: NextRequest) {
     const ctx = await requireRole(req, FINANCE);
     const parsed = schema.safeParse(await req.json().catch(() => null));
     if (!parsed.success) return fail("BAD_REQUEST", parsed.error.issues[0]?.message ?? "بيانات ناقصة", 400);
-    const { courierId, shipmentIds, amountPerOrder, note } = parsed.data;
+    const { courierId, shipmentIds, amountPerOrder, amountPerReturn, note } = parsed.data;
 
     const result = await db.transaction(async (tx) => {
       const seqR = await tx.execute(sql`SELECT nextval('awb_sequence')::text AS n`);
       const n = (Array.isArray(seqR) ? seqR : (seqR as { rows: { n: string }[] }).rows)[0] as { n: string };
       return recordCommission(tx, {
         courierId, shipmentIds, amountPerOrderP: poundsToPiastres(amountPerOrder),
+        amountPerReturnP: amountPerReturn ? poundsToPiastres(amountPerReturn) : undefined,
         note: note ?? null, code: commissionCode(n.n), actorUserId: ctx.user.userId,
       });
     });
@@ -81,6 +97,6 @@ export async function POST(req: NextRequest) {
       } catch { /* best-effort */ }
     })();
 
-    return ok({ id: result.id, code: result.code, count: result.count, total: formatEGP(result.totalP) }, 201);
+    return ok({ id: result.id, code: result.code, count: result.count, deliveries: result.deliveries, returns: result.returns, total: formatEGP(result.totalP) }, 201);
   } catch (err) { return handleError(err); }
 }

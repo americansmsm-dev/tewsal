@@ -13,7 +13,7 @@ import { useCurrentUser } from "../lib/useCurrentUser";
 import { apiCall, toArabicDigits } from "../lib/client";
 
 interface CourierRow { id: string; full_name: string; pending: number }
-interface Order { id: string; awb: string; delivered_at: string | null; merchant_name: string | null; cod_amount_p: string }
+interface Order { id: string; awb: string; delivered_at: string | null; merchant_name: string | null; cod_amount_p: string; kind: "delivery" | "return" }
 
 const FINANCE = ["super_admin", "branch_manager", "accountant"];
 
@@ -29,29 +29,32 @@ export default function CourierCommissionsPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [rate, setRate] = useState("");
+  const [returnRate, setReturnRate] = useState("");
   const [note, setNote] = useState("");
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
 
   const loadCouriers = useCallback(async () => {
-    const r = await apiCall<{ couriers: CourierRow[]; suggestedRateP: string }>("GET", "/api/v1/courier-commissions");
+    const r = await apiCall<{ couriers: CourierRow[]; suggestedRateP: string; suggestedReturnRateP: string }>("GET", "/api/v1/courier-commissions");
     if (r.ok && r.data) {
       setCouriers(r.data.couriers);
       if (!rate) setRate((Number(r.data.suggestedRateP) / 100).toFixed(2));
+      if (!returnRate) setReturnRate((Number(r.data.suggestedReturnRateP) / 100).toFixed(2));
     }
-  }, [rate]);
+  }, [rate, returnRate]);
   useEffect(() => { if (user) loadCouriers(); }, [user, loadCouriers]);
 
   const loadOrders = useCallback(async (id: string) => {
     if (!id) { setOrders([]); setPicked(new Set()); return; }
     setLoading(true);
-    const r = await apiCall<{ orders: Order[]; suggestedRateP: string }>("GET", `/api/v1/courier-commissions?courierId=${id}`);
+    const r = await apiCall<{ orders: Order[]; suggestedRateP: string; suggestedReturnRateP: string }>("GET", `/api/v1/courier-commissions?courierId=${id}`);
     setLoading(false);
     if (r.ok && r.data) {
       setOrders(r.data.orders);
       setPicked(new Set(r.data.orders.map((o) => o.id))); // كلهم متحددين تلقائي
       setRate((Number(r.data.suggestedRateP) / 100).toFixed(2));
+      setReturnRate((Number(r.data.suggestedReturnRateP) / 100).toFixed(2));
     }
   }, []);
   useEffect(() => { if (courierId) loadOrders(courierId); }, [courierId, loadOrders]);
@@ -64,7 +67,12 @@ export default function CourierCommissionsPage() {
   }
 
   const rateNum = Number(rate) || 0;
-  const total = (rateNum * picked.size).toFixed(2);
+  const returnRateNum = Number(returnRate) || 0;
+  // المرتجع بسعره والتسليم بسعره — الإجمالي بيجمع الاتنين
+  const pickedOrders = orders.filter((o) => picked.has(o.id));
+  const pickedReturns = pickedOrders.filter((o) => o.kind === "return").length;
+  const pickedDeliveries = pickedOrders.length - pickedReturns;
+  const total = (rateNum * pickedDeliveries + returnRateNum * pickedReturns).toFixed(2);
 
   async function submit() {
     setMsg(null);
@@ -72,7 +80,8 @@ export default function CourierCommissionsPage() {
     if (rateNum <= 0) { setMsg({ kind: "err", text: "اكتب مبلغ العمولة" }); return; }
     setBusy(true);
     const r = await apiCall<{ code: string; count: number; total: string }>("POST", "/api/v1/courier-commissions", {
-      courierId, shipmentIds: [...picked], amountPerOrder: rateNum.toFixed(2), note: note || null,
+      courierId, shipmentIds: [...picked], amountPerOrder: rateNum.toFixed(2),
+      amountPerReturn: returnRateNum > 0 ? returnRateNum.toFixed(2) : undefined, note: note || null,
     });
     setBusy(false);
     if (r.ok && r.data) {
@@ -129,14 +138,29 @@ export default function CourierCommissionsPage() {
             ) : (
               <>
                 <div className="card" style={{ padding: "1rem 1.15rem", marginBottom: "1rem" }}>
-                  <label className="label">العمولة لكل أوردر (ج)</label>
-                  <input className="input" value={rate} onChange={(e) => setRate(e.target.value)} inputMode="decimal" dir="ltr"
-                    style={{ textAlign: "right", maxWidth: 200 }} />
-                  <div style={{ fontSize: "0.75rem", color: "var(--muted)", marginTop: 4 }}>
-                    ده اقتراح من الإعدادات — عدّله زي ما تحب لكل مندوب.
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(180px, 100%), 1fr))", gap: 12, minWidth: 0 }}>
+                    <div>
+                      <label className="label">عمولة التسليم (ج)</label>
+                      <input className="input" value={rate} onChange={(e) => setRate(e.target.value)} inputMode="decimal" dir="ltr"
+                        style={{ textAlign: "right", width: "100%" }} />
+                      <div style={{ fontSize: "0.72rem", color: "var(--muted)", marginTop: 3 }}>
+                        {toArabicDigits(pickedDeliveries)} تسليم
+                      </div>
+                    </div>
+                    <div>
+                      <label className="label">عمولة المرتجع (ج)</label>
+                      <input className="input" value={returnRate} onChange={(e) => setReturnRate(e.target.value)} inputMode="decimal" dir="ltr"
+                        style={{ textAlign: "right", width: "100%" }} />
+                      <div style={{ fontSize: "0.72rem", color: "var(--muted)", marginTop: 3 }}>
+                        {toArabicDigits(pickedReturns)} مرتجع
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{ fontSize: "0.75rem", color: "var(--muted)", marginTop: 6 }}>
+                    دول اقتراح من الإعدادات — عدّلهم زي ما تحب لكل مندوب. المرتجع بسعر منفصل عن التسليم.
                   </div>
                   <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--border)", display: "flex", justifyContent: "space-between", fontWeight: 800, fontSize: "1.05rem", flexWrap: "wrap", gap: 6 }}>
-                    <span>الإجمالي ({toArabicDigits(picked.size)} أوردر × {rate || 0})</span>
+                    <span>الإجمالي ({toArabicDigits(pickedDeliveries)} تسليم + {toArabicDigits(pickedReturns)} مرتجع)</span>
                     <span style={{ color: "var(--color-orange-600)" }} dir="ltr">{total} ج</span>
                   </div>
                   <label className="label" style={{ marginTop: 10 }}>ملاحظة (اختياري)</label>
@@ -159,6 +183,9 @@ export default function CourierCommissionsPage() {
                       <label key={o.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "0.4rem 0", borderTop: "1px solid var(--border)", fontSize: "0.84rem", cursor: "pointer" }}>
                         <input type="checkbox" checked={picked.has(o.id)} onChange={() => toggle(o.id)} />
                         <span dir="ltr" style={{ fontWeight: 700, fontSize: "0.76rem" }}>{o.awb}</span>
+                        {o.kind === "return" && (
+                          <span className="badge" style={{ fontSize: "0.68rem", color: "var(--color-orange-600)", whiteSpace: "nowrap" }}>↩️ مرتجع</span>
+                        )}
                         <span style={{ color: "var(--muted)", flex: 1, minWidth: 0 }}>{o.merchant_name ?? "—"}</span>
                         <span style={{ color: "var(--muted)", fontSize: "0.75rem", whiteSpace: "nowrap" }}>
                           {o.delivered_at ? new Date(o.delivered_at).toLocaleDateString("ar-EG") : "—"}

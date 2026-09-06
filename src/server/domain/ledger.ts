@@ -657,8 +657,14 @@ export function buildCommissionEntry(i: {
   amountPerDeliveryP: Piastres;
   /** مصدر القيد — افتراضي كشف المندوب؛ "manual" لما المحاسب يسجّلها بإيده */
   sourceType?: "run_sheet" | "manual";
+  /**
+   * إجمالي صريح — بيتستخدم لما الأسعار مختلفة في نفس الدفعة
+   * (تسليم بسعر ومرتجع بسعر تاني). لو مش متبعت بنحسب
+   * السعر × العدد زي ما كان.
+   */
+  totalP?: Piastres;
 }): DraftEntry {
-  const total = i.amountPerDeliveryP * BigInt(i.deliveredCount);
+  const total = i.totalP ?? i.amountPerDeliveryP * BigInt(i.deliveredCount);
   if (total <= 0n) throw new Error("مفيش عمولة تتقيّد");
 
   return entry({

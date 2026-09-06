@@ -51,9 +51,15 @@ export async function GET(req: NextRequest) {
       await db.execute(sql`SELECT value FROM settings WHERE key = 'commission.default_per_delivery_p' LIMIT 1`)
     )[0]?.value;
     const cP = BigInt(typeof commissionP === "number" ? commissionP : Number(commissionP ?? 0) || 0);
+    // عمولة المرتجع — سعر منفصل عن التسليم
+    const commissionRetP = rowsOf<{ value: unknown }>(
+      await db.execute(sql`SELECT value FROM settings WHERE key = 'commission.default_per_return_p' LIMIT 1`)
+    )[0]?.value;
+    const crP = BigInt(typeof commissionRetP === "number" ? commissionRetP : Number(commissionRetP ?? 0) || 0);
 
     return ok({
       commission: { valueP: cP.toString(), value: formatEGP(cP) },
+      commissionReturn: { valueP: crP.toString(), value: formatEGP(crP) },
       prices: prices.map((p) => {
         // التكلفة = قاعدة عمولة المنطقة لو موجودة، وإلا الافتراضي العام
         const costP = p.cost_p != null ? BigInt(p.cost_p) : cP;
@@ -72,7 +78,7 @@ export async function GET(req: NextRequest) {
 }
 
 const schema = z.object({
-  kind: z.enum(["price", "fee", "commission"]),
+  kind: z.enum(["price", "fee", "commission", "commission_return"]),
   id: z.string().uuid().optional(),
   value: z.string().regex(/^\d+(\.\d{1,2})?$/, "المبلغ لازم رقم"),
 });
@@ -84,10 +90,13 @@ export async function PATCH(req: NextRequest) {
     if (!parsed.success) return fail("BAD_REQUEST", parsed.error.issues[0]?.message ?? "بيانات غير صالحة", 400);
     const { kind, id, value } = parsed.data;
     const p = poundsToPiastres(value);
-    if (kind === "commission") {
+    if (kind === "commission" || kind === "commission_return") {
+      const key = kind === "commission"
+        ? "commission.default_per_delivery_p"
+        : "commission.default_per_return_p";
       await db.execute(sql`
         UPDATE settings SET value = ${sql.raw(`'${p.toString()}'::jsonb`)}, updated_at = now()
-        WHERE key = 'commission.default_per_delivery_p'`);
+        WHERE key = ${key}`);
       return ok({ updated: true, value: formatEGP(p) });
     }
     if (!id) return fail("BAD_REQUEST", "معرّف ناقص", 400);

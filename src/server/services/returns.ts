@@ -101,6 +101,9 @@ export interface ReturnRow {
   escalationLevel: number;
   disposedAt: string | null;
   returnedAt: string | null;
+  /** المندوب الشايل المرتجع دلوقتي (لما يكون out_for_return) */
+  courierId: string | null;
+  courierName: string | null;
 }
 
 /**
@@ -110,7 +113,7 @@ export interface ReturnRow {
  */
 export async function listReturns(
   ex: SqlExecutor,
-  input: { filter?: "active" | "escalated" | "all"; limit?: number } = {}
+  input: { filter?: "active" | "escalated" | "out" | "all"; limit?: number } = {}
 ): Promise<{ rows: ReturnRow[]; thresholds: [number, number] }> {
   const [t1, t2] = await escalationThresholds(ex);
   const filter = input.filter ?? "active";
@@ -120,6 +123,7 @@ export async function listReturns(
     id: string; shipment_id: string; awb: string; merchant_name: string | null;
     status: string; shelf_id: string | null; shelf_code: string | null; shelf_name: string | null;
     entered_at: string; age_days: number; disposed_at: string | null; returned_at: string | null;
+    courier_id: string | null; courier_name: string | null;
   }>(
     await ex.execute(sql`
       SELECT r.id::text, r.shipment_id::text, r.awb, m.name_ar AS merchant_name,
@@ -127,13 +131,16 @@ export async function listReturns(
              r.shelf_id::text, sh.code AS shelf_code, sh.name_ar AS shelf_name,
              r.entered_at::text,
              GREATEST(0, (now()::date - s.status_updated_at::date))::int AS age_days,
-             r.disposed_at::text, r.returned_at::text
+             r.disposed_at::text, r.returned_at::text,
+             s.current_courier_id::text AS courier_id, cu.full_name AS courier_name
       FROM returns r
       JOIN shipments s ON s.id = r.shipment_id
       LEFT JOIN merchants m ON m.id = r.merchant_id
       LEFT JOIN return_shelves sh ON sh.id = r.shelf_id
+      LEFT JOIN users cu ON cu.id = s.current_courier_id
       WHERE 1=1
         ${filter === "active" ? sql`AND s.status = 'awaiting_return'` : sql``}
+        ${filter === "out" ? sql`AND s.status = 'out_for_return'` : sql``}
         ${filter === "escalated" ? sql`AND s.status = 'awaiting_return' AND (now()::date - s.status_updated_at::date) >= ${t1}` : sql``}
       ORDER BY
         (s.status = 'awaiting_return') DESC,
@@ -160,6 +167,8 @@ export async function listReturns(
       escalationLevel: level,
       disposedAt: r.disposed_at,
       returnedAt: r.returned_at,
+      courierId: r.courier_id,
+      courierName: r.courier_name,
     };
   });
 
@@ -339,4 +348,105 @@ async function disposalEntryFor(ex: SqlExecutor, shipmentId: string) {
     awb: ship.awb,
     shippingP,
   });
+}
+
+// ---------------------------------------------------------------
+// تحميل المرتجعات على مندوب — كشف مرتجعات راجع للتاجر
+// ---------------------------------------------------------------
+
+/**
+ * تحميل دفعة مرتجعات على مندوب في إجراء واحد:
+ * بينشئ كشف مرتجعات (run_sheets بنوع 'return')، ويعدّي كل شحنة
+ * على البوابة لـ out_for_return وهي متسندة للمندوب.
+ *
+ * ⚠️ آلة الحالات بتسمح بـ awaiting_return → out_for_return **من غير
+ *    ما تطلب مندوب**، وده كان بيسمح إن المرتجع «يخرج للإرجاع» ومحدش
+ *    ماسكه فيختفي من كل الشاشات. الفحص هنا (نفس فحص createRunSheet
+ *    و assignPickup) هو اللي بيقفل الباب ده.
+ *
+ * بعد كده كل حاجة مبنية وشغّالة لوحدها: الشحنة بتظهر في تطبيق
+ * المندوب (بيسأل عن out_for_return)، وبيأكّد بتوقيع، والقيد المالي
+ * (شحن + رسم مرتجع) بيتقيّد عند returned_to_merchant.
+ */
+export async function dispatchReturns(
+  ex: SqlExecutor,
+  input: {
+    courierId: string;
+    shipmentIds: string[];
+    code: string;
+    notes?: string | null;
+    actor: Actor;
+  }
+): Promise<{ runSheetId: string; code: string; dispatched: number }> {
+  if (input.shipmentIds.length === 0) {
+    throw new HttpError(400, "NO_SHIPMENTS", "لازم تختار مرتجع واحد على الأقل");
+  }
+
+  // المندوب لازم يكون موجود ومفعّل وبدور مندوب
+  const courier = rowsOf<{ role: string }>(
+    await ex.execute(sql`SELECT role FROM users WHERE id = ${input.courierId}::uuid AND is_active = true LIMIT 1`)
+  )[0];
+  if (!courier) throw new HttpError(422, "COURIER_MISSING", "المندوب مش موجود أو غير مفعّل");
+  if (courier.role !== "courier") throw new HttpError(422, "NOT_COURIER", "لازم يكون مندوب");
+
+  // كل المرتجعات لازم تكون لسه على الرف (awaiting_return)
+  const ships = rowsOf<{ id: string; status: string }>(
+    await ex.execute(sql`
+      SELECT id, status FROM shipments
+      WHERE id = ANY(${sql`ARRAY[${sql.join(
+        input.shipmentIds.map((id) => sql`${id}::uuid`),
+        sql`, `
+      )}]`})
+      FOR UPDATE
+    `)
+  );
+  if (ships.length !== input.shipmentIds.length) {
+    throw new HttpError(422, "SHIPMENT_MISSING", "بعض المرتجعات مش موجودة");
+  }
+  for (const s of ships) {
+    if (s.status !== "awaiting_return") {
+      throw new HttpError(422, "NOT_AWAITING_RETURN", "فيه شحنة مش بانتظار الإرجاع — لازم تكون على الرف");
+    }
+  }
+
+  const runSheetId = rowsOf<{ id: string }>(
+    await ex.execute(sql`
+      INSERT INTO run_sheets (code, courier_id, status, type, notes, created_by_user_id)
+      VALUES (${input.code}, ${input.courierId}::uuid, 'open', 'return',
+              ${input.notes ?? null}, ${input.actor.userId ?? null}::uuid)
+      RETURNING id
+    `)
+  )[0]!.id;
+
+  for (const s of ships) {
+    await applyTransition(ex, {
+      shipmentId: s.id,
+      to: "out_for_return",
+      actor: input.actor,
+      expectedStatus: "awaiting_return",
+      runSheetId,
+      courierId: input.courierId,
+    });
+    try {
+      await ex.execute(sql`
+        INSERT INTO run_sheet_items (run_sheet_id, shipment_id)
+        VALUES (${runSheetId}::uuid, ${s.id}::uuid)
+      `);
+    } catch (err) {
+      const e = err as { code?: string };
+      if (e?.code === "23505") {
+        throw new HttpError(422, "ALREADY_ON_SHEET", "فيه مرتجع على الكشف بالفعل");
+      }
+      throw err;
+    }
+  }
+
+  await ex.execute(sql`
+    UPDATE run_sheets
+    SET status = 'dispatched', shipments_count = ${ships.length},
+        dispatched_at = now(), updated_at = now()
+    WHERE id = ${runSheetId}::uuid
+  `);
+
+  return { runSheetId, code: input.code, dispatched: ships.length };
 }

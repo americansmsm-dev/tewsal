@@ -349,6 +349,13 @@ export const SEED_SETTINGS = [
     category: "operations",
     valueType: "money",
   },
+  {
+    key: "commission.default_per_return_p",
+    value: 2500, // ٢٥ ج — المرتجع مجهود أقل من التسليم (قابل للتعديل)
+    nameAr: "عمولة المندوب الافتراضية لكل مرتجع يرجّعه للتاجر",
+    category: "operations",
+    valueType: "money",
+  },
   // --- الشحنات ---
   {
     key: "shipment.allowed_open_pieces",

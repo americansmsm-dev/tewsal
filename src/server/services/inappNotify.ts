@@ -186,3 +186,19 @@ export async function notifyCommission(
     entityId: input.commissionId,
   });
 }
+
+/** إشعار المندوب إن مرتجعات اتحمّلت عليه عشان يرجّعها للتاجر */
+export async function notifyReturnsDispatched(
+  ex: SqlExecutor,
+  input: { runSheetId: string; code: string; courierId: string; count: number }
+): Promise<void> {
+  if (!(await eventEnabled(ex, "returns_dispatched"))) return;
+  await notifyUsers(ex, {
+    userIds: [input.courierId],
+    event: "returns_dispatched",
+    titleAr: "مرتجعات اتحمّلت عليك ↩️",
+    bodyAr: `${input.count} مرتجع لازم يرجّع للتاجر — كشف ${input.code}`,
+    entityType: "run_sheet",
+    entityId: input.runSheetId,
+  });
+}

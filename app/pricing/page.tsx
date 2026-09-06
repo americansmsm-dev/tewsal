@@ -12,7 +12,8 @@ import { apiCall } from "../lib/client";
 
 interface Price { id: string; zone: string; tier: string; price: string; priceP: string; cost: string; costP: string; margin: string; marginP: string; marginPct: number }
 interface Fee { id: string; code: string; nameAr: string; calcType: string; value: string; valueP: string; percentBp: number }
-interface Data { prices: Price[]; fees: Fee[]; commission: { value: string; valueP: string } }
+interface Data { prices: Price[]; fees: Fee[]; commission: { value: string; valueP: string };
+  commissionReturn: { value: string; valueP: string } }
 
 const TIER_LABEL: Record<string, string> = { t1: "t1 (أقل من ١٠٠)", t2: "t2 (١٠٠–٤٠٠)", t3: "t3 (أكتر من ٤٠٠)" };
 
@@ -78,6 +79,10 @@ export default function PricingPage() {
               <EditRow label="عمولة المندوب لكل أوردر متسلّم" valueP={data.commission.valueP}
                 canEdit={canEdit} first
                 onSave={(v) => apiCall("PATCH", "/api/v1/pricing", { kind: "commission", value: v }).then((r) => r.ok)} />
+              <EditRow label="عمولة المندوب لكل مرتجع يرجّعه للتاجر" valueP={data.commissionReturn.valueP}
+                hint="سعر منفصل عن التسليم — المندوب بيروح ويرجع فعلًا، فبياخد عليه عمولة"
+                canEdit={canEdit} first={false}
+                onSave={(v) => apiCall("PATCH", "/api/v1/pricing", { kind: "commission_return", value: v }).then((r) => r.ok)} />
             </div>
 
             <h3 style={{ fontSize: "1rem", margin: "0 0 0.6rem" }}>🧾 الرسوم</h3>

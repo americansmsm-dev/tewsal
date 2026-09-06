@@ -1,6 +1,7 @@
 /**
  * GET /api/v1/returns — سجل المرتجعات (رف + عمر + تصعيد).
- * ?filter=active|escalated|all  (الافتراضي active)
+ * ?filter=active|out|escalated|all  (الافتراضي active)
+ * out = مرتجعات مع المندوب في الطريق للتاجر
  * عمليات/مالية.
  */
 import { type NextRequest } from "next/server";
@@ -16,7 +17,7 @@ export async function GET(req: NextRequest) {
   try {
     await requireRole(req, OPS_FINANCE);
     const f = new URL(req.url).searchParams.get("filter");
-    const filter = f === "escalated" || f === "all" ? f : "active";
+    const filter = f === "escalated" || f === "all" || f === "out" ? f : "active";
     const { rows, thresholds } = await listReturns(db, { filter });
     return ok({ returns: rows, count: rows.length, thresholds });
   } catch (err) {

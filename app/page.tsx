@@ -59,6 +59,8 @@ const STATUS_FILTERS: (ShipmentStatus | "")[] = [
   "out_for_delivery",
   "delivered",
   "delivery_failed",
+  "awaiting_return",
+  "out_for_return",
   "returned_to_merchant",
 ];
 

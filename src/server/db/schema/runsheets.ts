@@ -39,6 +39,8 @@ export const runSheets = pgTable(
     branchId: uuid("branch_id").references(() => branches.id, { onDelete: "set null" }),
     /** open · dispatched · closed · cancelled */
     status: text("status").notNull().default("open"),
+    /** delivery = كشف توصيل · return = كشف مرتجعات راجعة للتاجر */
+    type: text("type").notNull().default("delivery"),
     shipmentsCount: integer("shipments_count").notNull().default(0),
     deliveredCount: integer("delivered_count").notNull().default(0),
     /** إجمالي عمولة المندوب المقيّدة عند الإغلاق */
@@ -60,6 +62,7 @@ export const runSheets = pgTable(
     uniqueIndex("run_sheets_code_uq").on(t.code),
     index("run_sheets_courier_idx").on(t.courierId, t.status),
     index("run_sheets_status_idx").on(t.status, t.createdAt),
+    index("run_sheets_type_status_idx").on(t.type, t.status),
   ]
 );
 

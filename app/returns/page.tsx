@@ -26,7 +26,10 @@ interface ReturnRow {
   escalationLevel: number;
   disposedAt: string | null;
   returnedAt: string | null;
+  courierId: string | null;
+  courierName: string | null;
 }
+interface Courier { id: string; full_name: string }
 interface Shelf { id: string; code: string; nameAr: string; isActive: boolean; onShelf: number }
 
 const STATUS_AR: Record<string, string> = {
@@ -44,6 +47,7 @@ const STATUS_TONE: Record<string, string> = {
 
 const FILTERS = [
   { key: "active", label: "على الرف" },
+  { key: "out", label: "مع المندوب" },
   { key: "escalated", label: "متصعّدة" },
   { key: "all", label: "الكل" },
 ] as const;
@@ -57,6 +61,9 @@ export default function ReturnsPage() {
   const [loading, setLoading] = useState(true);
   const [disposeTarget, setDisposeTarget] = useState<ReturnRow | null>(null);
   const [showShelves, setShowShelves] = useState(false);
+  // تحديد متعدد لتحميل المرتجعات على مندوب
+  const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [showDispatch, setShowDispatch] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -66,6 +73,7 @@ export default function ReturnsPage() {
     ]);
     if (r.ok && r.data) { setRows(r.data.returns); setThresholds(r.data.thresholds); }
     if (s.ok && s.data) setShelves(s.data.shelves);
+    setPicked(new Set());
     setLoading(false);
   }, [filter]);
   useEffect(() => { if (user) load(); }, [user, load]);
@@ -80,6 +88,21 @@ export default function ReturnsPage() {
     if (r.ok) load();
   }
 
+  // اللي ينفع يتحمّل على مندوب = اللي لسه على الرف
+  const dispatchable = rows.filter((r) => r.status === "awaiting_return");
+  function toggle(shipmentId: string) {
+    setPicked((prev) => {
+      const next = new Set(prev);
+      next.has(shipmentId) ? next.delete(shipmentId) : next.add(shipmentId);
+      return next;
+    });
+  }
+  function toggleAll() {
+    setPicked((prev) =>
+      prev.size === dispatchable.length ? new Set() : new Set(dispatchable.map((r) => r.shipmentId))
+    );
+  }
+
   return (
     <div style={{ minHeight: "100vh" }}>
       <AppHeader user={user} />
@@ -92,9 +115,16 @@ export default function ReturnsPage() {
               المرتجعات على الرفوف بأعمارها. التصعيد بعد <b>{t1}</b> يوم (تنبيه) و<b>{t2}</b> يوم (مؤهّل للإتلاف).
             </p>
           </div>
-          <button className="btn btn-ghost" onClick={() => setShowShelves(true)}>
-            الرفوف ({shelves.length})
-          </button>
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            {canOps && picked.size > 0 && (
+              <button className="btn btn-primary" onClick={() => setShowDispatch(true)}>
+                ↩️ حمّل على مندوب ({picked.size})
+              </button>
+            )}
+            <button className="btn btn-ghost" onClick={() => setShowShelves(true)}>
+              الرفوف ({shelves.length})
+            </button>
+          </div>
         </div>
 
         {/* تبويبات الفلترة */}
@@ -115,21 +145,45 @@ export default function ReturnsPage() {
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.85rem", minWidth: 820 }}>
             <thead>
               <tr style={{ background: "var(--bg-soft)", textAlign: "right" }}>
-                <Th>الشحنة</Th><Th>التاجر</Th><Th>الحالة</Th><Th>الرف</Th><Th>العمر</Th><Th>التصعيد</Th><Th>إجراء</Th>
+                {canOps && (
+                  <Th>
+                    {dispatchable.length > 0 && (
+                      <input
+                        type="checkbox"
+                        checked={picked.size === dispatchable.length && dispatchable.length > 0}
+                        onChange={toggleAll}
+                        title="تحديد الكل"
+                      />
+                    )}
+                  </Th>
+                )}
+                <Th>الشحنة</Th><Th>التاجر</Th><Th>الحالة</Th><Th>المندوب</Th><Th>الرف</Th><Th>العمر</Th><Th>التصعيد</Th><Th>إجراء</Th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={7} style={{ padding: "2rem", textAlign: "center", color: "var(--muted)" }}>جاري التحميل...</td></tr>
+                <tr><td colSpan={canOps ? 9 : 8} style={{ padding: "2rem", textAlign: "center", color: "var(--muted)" }}>جاري التحميل...</td></tr>
               ) : rows.length === 0 ? (
-                <tr><td colSpan={7} style={{ padding: "2.5rem", textAlign: "center", color: "var(--muted)" }}>مفيش مرتجعات هنا 🎉</td></tr>
+                <tr><td colSpan={canOps ? 9 : 8} style={{ padding: "2.5rem", textAlign: "center", color: "var(--muted)" }}>مفيش مرتجعات هنا 🎉</td></tr>
               ) : rows.map((r) => {
                 const onShelf = r.status === "awaiting_return";
                 return (
                   <tr key={r.id} style={{ borderTop: "1px solid var(--border)" }}>
+                    {canOps && (
+                      <Td>
+                        {onShelf && (
+                          <input
+                            type="checkbox"
+                            checked={picked.has(r.shipmentId)}
+                            onChange={() => toggle(r.shipmentId)}
+                          />
+                        )}
+                      </Td>
+                    )}
                     <Td><span style={{ fontFamily: "monospace", fontWeight: 700 }}>{r.awb}</span></Td>
                     <Td>{r.merchantName}</Td>
                     <Td><span style={{ fontWeight: 700, color: STATUS_TONE[r.status] }}>{STATUS_AR[r.status] ?? r.status}</span></Td>
+                    <Td><span style={{ color: r.courierName ? "var(--ink)" : "var(--muted)" }}>{r.courierName ?? "—"}</span></Td>
                     <Td>
                       {onShelf && canOps ? (
                         <select
@@ -169,6 +223,13 @@ export default function ReturnsPage() {
       )}
       {showShelves && (
         <ShelvesModal shelves={shelves} canCreate={canOps} onClose={() => setShowShelves(false)} onChange={load} />
+      )}
+      {showDispatch && (
+        <DispatchReturnsModal
+          rows={dispatchable.filter((r) => picked.has(r.shipmentId))}
+          onClose={() => setShowDispatch(false)}
+          onDone={() => { setShowDispatch(false); load(); }}
+        />
       )}
     </div>
   );
@@ -279,4 +340,91 @@ function Th({ children }: { children: React.ReactNode }) {
 }
 function Td({ children }: { children: React.ReactNode }) {
   return <td style={{ padding: "0.65rem 0.85rem", verticalAlign: "middle", whiteSpace: "nowrap" }}>{children}</td>;
+}
+
+/**
+ * تحميل مرتجعات على مندوب — إجراء واحد.
+ * رحلة المرتجع بطبيعتها لتاجر، فبنجمّع المختار بالتاجر عشان
+ * المستخدم يشوف هو رايح لمين قبل ما يحمّل.
+ */
+function DispatchReturnsModal({
+  rows, onClose, onDone,
+}: { rows: ReturnRow[]; onClose: () => void; onDone: () => void }) {
+  const [couriers, setCouriers] = useState<Courier[]>([]);
+  const [courierId, setCourierId] = useState("");
+  const [notes, setNotes] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    apiCall<{ couriers: Courier[] }>("GET", "/api/v1/couriers").then((r) => {
+      if (r.ok && r.data) setCouriers(r.data.couriers);
+    });
+  }, []);
+
+  // تجميع بالتاجر
+  const byMerchant = rows.reduce<Record<string, ReturnRow[]>>((acc, r) => {
+    (acc[r.merchantName] ||= []).push(r);
+    return acc;
+  }, {});
+
+  async function submit() {
+    if (!courierId) { setErr("اختار المندوب الأول"); return; }
+    setBusy(true); setErr(null);
+    const r = await apiCall<{ code: string; dispatched: number }>("POST", "/api/v1/returns/dispatch", {
+      courierId, shipmentIds: rows.map((x) => x.shipmentId), notes: notes || null,
+    });
+    setBusy(false);
+    if (r.ok) onDone();
+    else setErr(r.error?.message ?? "فشل التحميل");
+  }
+
+  return (
+    <Overlay onClose={onClose}>
+      <h3 style={{ margin: "0 0 0.3rem", fontSize: "1.05rem" }}>↩️ تحميل مرتجعات على مندوب</h3>
+      <p style={{ margin: "0 0 0.9rem", color: "var(--muted)", fontSize: "0.82rem", lineHeight: 1.6 }}>
+        المرتجعات دي هتخرج من الرف وتتحمّل على المندوب عشان يرجّعها للتاجر.
+        هتظهر في تطبيقه على طول، ويأكّد الاستلام بتوقيع التاجر.
+      </p>
+
+      <div style={{ marginBottom: 10 }}>
+        <div style={{ fontSize: "0.78rem", color: "var(--muted)", marginBottom: 4 }}>المندوب</div>
+        <select className="input" value={courierId} onChange={(e) => setCourierId(e.target.value)} style={{ width: "100%" }}>
+          <option value="">— اختار المندوب —</option>
+          {couriers.map((c) => <option key={c.id} value={c.id}>{c.full_name}</option>)}
+        </select>
+      </div>
+
+      <div style={{ marginBottom: 10 }}>
+        <div style={{ fontSize: "0.78rem", color: "var(--muted)", marginBottom: 4 }}>ملاحظات (اختياري)</div>
+        <input className="input" value={notes} onChange={(e) => setNotes(e.target.value)}
+          placeholder="مثلاً: يسلّم قبل الضهر" style={{ width: "100%" }} maxLength={1000} />
+      </div>
+
+      <div className="card" style={{ padding: "0.6rem 0.8rem", marginBottom: 12, maxHeight: 220, overflowY: "auto" }}>
+        <div style={{ fontWeight: 800, fontSize: "0.85rem", marginBottom: 6 }}>
+          {rows.length} مرتجع · {Object.keys(byMerchant).length} تاجر
+        </div>
+        {Object.entries(byMerchant).map(([merchant, list]) => (
+          <div key={merchant} style={{ marginBottom: 8 }}>
+            <div style={{ fontWeight: 700, fontSize: "0.82rem", color: "var(--color-orange-600)" }}>
+              {merchant} ({list.length})
+            </div>
+            <div style={{ fontSize: "0.75rem", color: "var(--muted)", fontFamily: "monospace", lineHeight: 1.7 }}>
+              {list.map((r) => r.awb).join(" · ")}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {err && <ErrorBox msg={err} />}
+
+      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+        <button className="btn btn-ghost" onClick={onClose} disabled={busy}>إلغاء</button>
+        <button className="btn btn-primary" onClick={submit} disabled={busy || !courierId}>
+          {busy ? "جاري التحميل..." : `حمّل ${rows.length} مرتجع`}
+        </button>
+      </div>
+    </Overlay>
+  );
 }

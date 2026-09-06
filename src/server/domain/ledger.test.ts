@@ -398,3 +398,28 @@ describe("⚠️ كل القيود لازم تتوازن — فحص شامل", (
     }
   });
 });
+
+describe("عمولة بأسعار مختلفة (تسليم + مرتجع)", () => {
+  it("بيستخدم الإجمالي الصريح لما الأسعار مختلفة", () => {
+    // ٢ تسليم بـ٥٠ ج + ١ مرتجع بـ٢٥ ج = ١٢٥ ج
+    const e = buildCommissionEntry({
+      runSheetId: "11111111-2222-4000-8000-000000000001",
+      courierId: "22222222-3333-4000-8000-000000000002",
+      deliveredCount: 3,
+      amountPerDeliveryP: 5000n,
+      totalP: 12500n,
+      sourceType: "manual",
+    });
+    expect(totalDebits(e)).toBe(12500n);
+  });
+
+  it("من غير إجمالي صريح بيحسب السعر × العدد زي الأول", () => {
+    const e = buildCommissionEntry({
+      runSheetId: "11111111-2222-4000-8000-000000000003",
+      courierId: "22222222-3333-4000-8000-000000000004",
+      deliveredCount: 3,
+      amountPerDeliveryP: 5000n,
+    });
+    expect(totalDebits(e)).toBe(15000n);
+  });
+});

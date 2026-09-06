@@ -35,6 +35,15 @@ async function commissionPerDelivery(ex: SqlExecutor): Promise<Piastres> {
   return BigInt(Number(r[0]?.value ?? 5000));
 }
 
+/** عمولة المرتجع الواحد — سعر منفصل بقرار المالك (افتراضي ٢٥ ج) */
+async function commissionPerReturn(ex: SqlExecutor): Promise<Piastres> {
+  const r = rowsOf<{ value: unknown }>(
+    await ex.execute(sql`SELECT value FROM settings WHERE key = 'commission.default_per_return_p' LIMIT 1`)
+  );
+  const v = Number(r[0]?.value ?? 0);
+  return v > 0 ? BigInt(Math.trunc(v)) : commissionPerDelivery(ex);
+}
+
 export interface CreateRunSheetInput {
   courierId: string;
   branchId?: string | null;
@@ -149,22 +158,28 @@ export async function closeRunSheet(
   ex: SqlExecutor,
   input: { runSheetId: string; actor: Actor }
 ): Promise<{ status: string; deliveredCount: number; commissionP: Piastres }> {
-  const rs = rowsOf<{ status: string; courier_id: string }>(
-    await ex.execute(sql`SELECT status, courier_id::text FROM run_sheets WHERE id = ${input.runSheetId}::uuid FOR UPDATE`)
+  const rs = rowsOf<{ status: string; courier_id: string; type: string }>(
+    await ex.execute(sql`SELECT status, courier_id::text, type FROM run_sheets WHERE id = ${input.runSheetId}::uuid FOR UPDATE`)
   )[0];
   if (!rs) throw new HttpError(404, "NOT_FOUND", "الكشف مش موجود");
   if (rs.status !== "dispatched") {
     throw new HttpError(422, "BAD_STATUS", "الكشف لازم يكون منزّل (dispatched) الأول");
   }
 
-  // الشحنات المسلَّمة على الكشف ده (تسليم كامل أو جزئي)
+  // ⚠️ كشف المرتجعات بيخلص بحالة returned_to_merchant مش delivered —
+  //    من غير التفرقة دي كان هيقفل بصفر دايمًا.
+  const isReturn = rs.type === "return";
+  const doneStatuses = isReturn
+    ? sql`('returned_to_merchant')`
+    : sql`('delivered', 'partially_delivered')`;
+
   const delivered = rowsOf<{ n: number }>(
     await ex.execute(sql`
       SELECT count(*)::int AS n
       FROM run_sheet_items rsi
       JOIN shipments s ON s.id = rsi.shipment_id
       WHERE rsi.run_sheet_id = ${input.runSheetId}::uuid
-        AND s.status IN ('delivered', 'partially_delivered')
+        AND s.status IN ${doneStatuses}
     `)
   )[0]!.n;
 
@@ -172,8 +187,8 @@ export async function closeRunSheet(
   //    الرقم ده **اقتراح** بس بيتخزّن للعرض — المحاسب هو اللي بيحاسب
   //    المندوب من شاشة «عمولات المناديب» ويعدّل المبلغ قبل ما يتسجّل
   //    في الدفتر. كده مفيش احتمال يتحسب مرتين.
-  const perDelivery = await commissionPerDelivery(ex);
-  const commissionP: Piastres = delivered > 0 ? perDelivery * BigInt(delivered) : 0n;
+  const rate = isReturn ? await commissionPerReturn(ex) : await commissionPerDelivery(ex);
+  const commissionP: Piastres = delivered > 0 ? rate * BigInt(delivered) : 0n;
 
   await ex.execute(sql`
     UPDATE run_sheets
