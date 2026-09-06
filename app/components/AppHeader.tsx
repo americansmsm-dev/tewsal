@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiCall } from "../lib/client";
+import { NotificationBell } from "./NotificationBell";
 
 export interface CurrentUser {
   id: string;
@@ -69,6 +70,7 @@ export function AppHeader({ user }: { user: CurrentUser }) {
       </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <NotificationBell />
         <button
           onClick={toggleTheme}
           className="btn btn-ghost"

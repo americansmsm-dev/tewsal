@@ -10,7 +10,7 @@ import { AppNav } from "../components/AppNav";
 import { useCurrentUser } from "../lib/useCurrentUser";
 import { apiCall } from "../lib/client";
 
-interface Price { id: string; zone: string; tier: string; price: string; priceP: string }
+interface Price { id: string; zone: string; tier: string; price: string; priceP: string; cost: string; costP: string; margin: string; marginP: string; marginPct: number }
 interface Fee { id: string; code: string; nameAr: string; calcType: string; value: string; valueP: string; percentBp: number }
 interface Data { prices: Price[]; fees: Fee[]; commission: { value: string; valueP: string } }
 
@@ -48,10 +48,22 @@ export default function PricingPage() {
           <div className="card" style={{ padding: "2rem", textAlign: "center", color: "var(--muted)" }}>جاري التحميل...</div>
         ) : (
           <>
-            <h3 style={{ fontSize: "1rem", margin: "0 0 0.6rem" }}>💰 سعر الشحن (منطقة × شريحة)</h3>
+            <h3 style={{ fontSize: "1rem", margin: "0 0 0.3rem" }}>💰 سعر الشحن (منطقة × شريحة)</h3>
+            <p style={{ color: "var(--muted)", fontSize: "0.8rem", margin: "0 0 0.6rem", lineHeight: 1.6 }}>
+              جنب كل سعر: <b>تكلفة المندوب</b> المتوقعة للمنطقة و<b>هامش مكسبك</b> (السعر ناقص التكلفة).
+              الهامش الأحمر معناه السعر واطي على المنطقة دي — ارفعه.
+            </p>
             <div className="card" style={{ padding: "0.5rem 0.9rem", marginBottom: "1.5rem" }}>
               {data.prices.map((p, i) => (
                 <EditRow key={p.id} label={`${p.zone} · ${TIER_LABEL[p.tier] ?? p.tier}`} valueP={p.priceP}
+                  hint={
+                    <span>
+                      التكلفة {p.cost} · الهامش{" "}
+                      <b style={{ color: p.marginPct >= 40 ? "var(--color-success)" : p.marginPct >= 15 ? "var(--color-warning)" : "var(--color-danger)" }}>
+                        {p.margin} ({p.marginPct}%)
+                      </b>
+                    </span>
+                  }
                   canEdit={canEdit} first={i === 0}
                   onSave={(v) => apiCall("PATCH", "/api/v1/pricing", { kind: "price", id: p.id, value: v }).then((r) => r.ok)} />
               ))}
@@ -85,7 +97,7 @@ export default function PricingPage() {
 }
 
 function EditRow({ label, valueP, hint, canEdit, first, onSave }: {
-  label: string; valueP: string; hint?: string; canEdit: boolean; first: boolean; onSave: (v: string) => Promise<boolean>;
+  label: string; valueP: string; hint?: React.ReactNode; canEdit: boolean; first: boolean; onSave: (v: string) => Promise<boolean>;
 }) {
   const [v, setV] = useState(toPounds(valueP));
   const [busy, setBusy] = useState(false);

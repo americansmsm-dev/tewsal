@@ -23,6 +23,7 @@ import {
 import { sql } from "drizzle-orm";
 import { merchants } from "./merchants";
 import { shipments } from "./shipments";
+import { users } from "./identity";
 
 export const notificationTemplates = pgTable(
   "notification_templates",
@@ -59,6 +60,34 @@ export const notificationLog = pgTable(
     index("notification_log_merchant_idx").on(t.merchantId, t.createdAt),
     index("notification_log_shipment_idx").on(t.shipmentId),
   ]
+);
+
+/**
+ * الإشعارات الداخلية — لكل مستخدم (مندوب/تاجر/إدارة).
+ * مختلفة عن notification_log (اللي للعميل عبر واتساب) — دي صندوق وارد
+ * جوّه السيستم بيتقرا بالجرس والبولنج.
+ */
+export const notifications = pgTable(
+  "notifications",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** المستلم */
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    /** دور المستلم وقت الإرسال (للفلترة والعرض) */
+    role: text("role").notNull(),
+    /** نوع الحدث: status_change · settlement_paid · pickup_assigned · commission · manual ... */
+    event: text("event").notNull(),
+    titleAr: text("title_ar").notNull(),
+    bodyAr: text("body_ar").notNull(),
+    /** ربط بكيان (shipment · settlement · pickup ...) للفتح المباشر */
+    entityType: text("entity_type"),
+    entityId: text("entity_id"),
+    isRead: boolean("is_read").notNull().default(false),
+    /** لو الإشعار متبعت يدويًا — مين بعته */
+    createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("notifications_user_idx").on(t.userId, t.isRead, t.createdAt)]
 );
 
 export const deliveryRatings = pgTable(

@@ -13,6 +13,7 @@ import { z } from "zod";
 import { db } from "@/server/db";
 import { poundsToPiastres, formatEGP } from "@/lib/money";
 import { pendingOrders, couriersWithPending, suggestedRate, recordCommission } from "@/server/services/courierCommission";
+import { notifyCommission } from "@/server/services/inappNotify";
 import { requireRole } from "@/server/http/context";
 import { ok, fail, handleError } from "@/server/http/respond";
 
@@ -72,6 +73,13 @@ export async function POST(req: NextRequest) {
         note: note ?? null, code: commissionCode(n.n), actorUserId: ctx.user.userId,
       });
     });
+
+    // إشعار المندوب بعمولته — best-effort بعد الكوميت
+    void (async () => {
+      try {
+        await notifyCommission(db, { commissionId: result.id, code: result.code, courierId, total: formatEGP(result.totalP), count: result.count });
+      } catch { /* best-effort */ }
+    })();
 
     return ok({ id: result.id, code: result.code, count: result.count, total: formatEGP(result.totalP) }, 201);
   } catch (err) { return handleError(err); }

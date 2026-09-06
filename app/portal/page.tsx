@@ -13,6 +13,7 @@ import { WalletPanel } from "../components/WalletPanel";
 import { InstallPrompt } from "../components/InstallPrompt";
 import { OrderDetailModal, LabelModal } from "../components/OrderModals";
 import { ProfileCard } from "../components/ProfileCard";
+import { NotificationBell } from "../components/NotificationBell";
 import { apiCall, STATUS_LABELS_AR, statusTone, toneStyle, toArabicDigits, type ShipmentStatus } from "../lib/client";
 
 interface Me { id: string; name: string; role: string; merchantId: string | null; }
@@ -100,7 +101,10 @@ export default function PortalPage() {
           <div style={{ fontSize: "1.2rem", fontWeight: 800 }}>توص<span style={{ color: "var(--color-orange-500)" }}>ّل</span></div>
           <div style={{ fontSize: "0.72rem", opacity: 0.6 }}>{TAB_LABELS[tab]}</div>
         </div>
-        <span style={{ fontSize: "0.85rem", fontWeight: 700 }}>{me.name}</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <NotificationBell />
+          <span style={{ fontSize: "0.85rem", fontWeight: 700 }}>{me.name}</span>
+        </div>
       </header>
 
       <main style={{ padding: "1.1rem" }}>

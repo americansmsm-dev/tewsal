@@ -23,9 +23,15 @@ function rowsOf<T>(r: unknown): T[] {
 export async function GET(req: NextRequest) {
   try {
     await requireUser(req);
-    const prices = rowsOf<{ id: string; zone: string; tier: string; price_p: string }>(
+    const prices = rowsOf<{ id: string; zone: string; tier: string; price_p: string; cost_p: string | null }>(
       await db.execute(sql`
-        SELECT pli.id, z.name_ar AS zone, pli.tier, pli.price_p::text
+        SELECT pli.id, z.name_ar AS zone, pli.tier, pli.price_p::text,
+               -- تكلفة المندوب على مستوى المنطقة (لو فيه قاعدة عمولة خاصة بالمنطقة)
+               (SELECT ccr.amount_p::text FROM courier_commission_rules ccr
+                  WHERE ccr.zone_id = pli.zone_id AND ccr.courier_id IS NULL AND ccr.governorate_id IS NULL
+                    AND ccr.is_active = true AND ccr.effective_from <= now()
+                    AND (ccr.effective_to IS NULL OR ccr.effective_to > now())
+                  ORDER BY ccr.priority DESC LIMIT 1) AS cost_p
         FROM price_list_items pli
         JOIN zones z ON z.id = pli.zone_id
         JOIN price_lists pl ON pl.id = pli.price_list_id
@@ -48,7 +54,18 @@ export async function GET(req: NextRequest) {
 
     return ok({
       commission: { valueP: cP.toString(), value: formatEGP(cP) },
-      prices: prices.map((p) => ({ id: p.id, zone: p.zone, tier: p.tier, price: formatEGP(BigInt(p.price_p)), priceP: p.price_p })),
+      prices: prices.map((p) => {
+        // التكلفة = قاعدة عمولة المنطقة لو موجودة، وإلا الافتراضي العام
+        const costP = p.cost_p != null ? BigInt(p.cost_p) : cP;
+        const marginP = BigInt(p.price_p) - costP;
+        const marginPct = BigInt(p.price_p) > 0n ? Math.round((Number(marginP) / Number(p.price_p)) * 1000) / 10 : 0;
+        return {
+          id: p.id, zone: p.zone, tier: p.tier,
+          price: formatEGP(BigInt(p.price_p)), priceP: p.price_p,
+          cost: formatEGP(costP), costP: costP.toString(),
+          margin: formatEGP(marginP), marginP: marginP.toString(), marginPct,
+        };
+      }),
       fees: fees.map((f) => ({ id: f.id, code: f.code, nameAr: f.name_ar, calcType: f.calc_type, value: formatEGP(BigInt(f.value_p)), valueP: f.value_p, percentBp: f.percent_bp })),
     });
   } catch (err) { return handleError(err); }

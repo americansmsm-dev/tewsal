@@ -33,6 +33,7 @@ import { enterReturns } from "@/server/services/returns";
 import { recordAttachment } from "@/server/services/attachment";
 import { fireWebhooks } from "@/server/services/apiAccess";
 import { notifyStatusChange } from "@/server/services/notifications";
+import { notifyShipmentStatus } from "@/server/services/inappNotify";
 import { requireUser } from "@/server/http/context";
 import { ok, fail, handleError, forbidden } from "@/server/http/respond";
 import type { UserRole } from "@/server/db/schema/identity";
@@ -244,6 +245,21 @@ export async function POST(
       })();
       // إشعار العميل (واتساب أو محاكاة) — نفس النمط best-effort
       void (async () => { try { await notifyStatusChange(db, { shipmentId, event: String(appliedTo) }); } catch { /* best-effort */ } })();
+    }
+
+    // إشعار داخلي للتاجر والمندوب المسند (لكل انتقال مش replay) — best-effort
+    if (!result.res.idempotentReplay) {
+      void (async () => {
+        try {
+          const r = await db.execute(sql`SELECT merchant_id::text AS mid, current_courier_id::text AS cid FROM shipments WHERE id = ${shipmentId}::uuid`);
+          const rows = (Array.isArray(r) ? r : (r as { rows: unknown[] }).rows) as { mid: string; cid: string | null }[];
+          const row = rows[0];
+          await notifyShipmentStatus(db, {
+            shipmentId, awb: result.res.awb, toStatus: String(appliedTo),
+            merchantId: row?.mid ?? null, courierId: row?.cid ?? null,
+          });
+        } catch { /* best-effort */ }
+      })();
     }
 
     return ok(

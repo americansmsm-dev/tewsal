@@ -271,7 +271,7 @@ function CouriersTab() {
 }
 
 // ─── التجار ───
-interface MProfit { id: string; name: string; code: string; tier: string; shipmentsCount: number; deliveredCount: number; returnedCount: number; lostCount: number; deliveryRate: number; revenueP: string; avgRevenuePerDeliveredP: string }
+interface MProfit { id: string; name: string; code: string; tier: string; shipmentsCount: number; deliveredCount: number; returnedCount: number; lostCount: number; deliveryRate: number; revenueP: string; commissionP: string; compensationP: string; profitP: string; marginPct: number; avgProfitPerDeliveredP: string }
 
 function MerchantsTab() {
   const [rows, setRows] = useState<MProfit[]>([]);
@@ -285,38 +285,43 @@ function MerchantsTab() {
   if (loading) return <Muted>جاري التحميل...</Muted>;
 
   const totalRev = rows.reduce((s, m) => s + BigInt(m.revenueP), 0n);
+  const totalProfit = rows.reduce((s, m) => s + BigInt(m.profitP), 0n);
   const totalShip = rows.reduce((s, m) => s + m.shipmentsCount, 0);
-  const best = [...rows].sort((a, b) => (BigInt(b.revenueP) > BigInt(a.revenueP) ? 1 : -1))[0];
+  const best = [...rows].sort((a, b) => (BigInt(b.profitP) > BigInt(a.profitP) ? 1 : -1))[0];
 
   return (
     <div style={{ display: "grid", gap: "1rem" }}>
       <StatRow>
-        <Stat label="إيرادك من التجار" value={egp(totalRev.toString())} tone="accent" note={`من ${totalShip} شحنة · ${rows.length} تاجر`} />
-        {best && <Stat label="أعلى تاجر إيرادًا" value={best.name} tone="good" note={egp(best.revenueP)} />}
+        <Stat label="صافي مكسبك من التجار" value={egp(totalProfit.toString())} tone={totalProfit >= 0n ? "good" : "bad"} note="الرسوم ناقص عمولات المناديب والتعويضات" />
+        <Stat label="إجمالي الرسوم (إيرادك)" value={egp(totalRev.toString())} tone="accent" note={`من ${totalShip} شحنة · ${rows.length} تاجر`} />
+        {best && <Stat label="أعلى تاجر مكسبًا" value={best.name} tone="good" note={egp(best.profitP)} />}
       </StatRow>
 
-      <Section title="ربحية التجار" hint="كل تاجر بيجيبلك كام، وبيسلّم نسبة قد إيه. «نسبة التسليم» العالية معناها تاجر بضاعته بتوصل — والتاجر اللي نسبته واطية بيكلّفك مرتجعات. استخدم ده وإنت بتفاوض على الأسعار.">
+      <Section title="ربحية التجار" hint="كل تاجر بيكسّبك كام صافي (بعد عمولة المندوب والتعويضات) وبيسلّم نسبة قد إيه. التاجر اللي هامشه واطي أو سالب بيكلّفك — استخدم ده وإنت بتفاوض على الأسعار. «المصاريف العامة» (بنزين/تشغيل) مش متوزّعة هنا — تلاقيها في تبويب المحاسبة.">
     <div style={{ overflowX: "auto", margin: "0 -0.35rem" }}>
-      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.83rem", minWidth: 820 }}>
+      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.83rem", minWidth: 980 }}>
         <thead>
           <tr style={{ background: "var(--bg-soft)", textAlign: "right" }}>
-            <Th>التاجر</Th><Th>الشريحة</Th><Th>شحنات</Th><Th>تسليم</Th><Th>مرتجع</Th><Th>نسبة التسليم</Th><Th>الإيراد</Th><Th>متوسط/شحنة</Th>
+            <Th>التاجر</Th><Th>الشريحة</Th><Th>شحنات</Th><Th>نسبة التسليم</Th><Th>الإيراد</Th><Th>عمولات</Th><Th>تعويضات</Th><Th>صافي الربح</Th><Th>الهامش</Th>
           </tr>
         </thead>
         <tbody>
-          {rows.length === 0 ? <tr><td colSpan={8} style={{ padding: "2.5rem", textAlign: "center", color: "var(--muted)" }}>مفيش تجار بشحنات لسه</td></tr> :
-           rows.map((m) => (
+          {rows.length === 0 ? <tr><td colSpan={9} style={{ padding: "2.5rem", textAlign: "center", color: "var(--muted)" }}>مفيش تجار بشحنات لسه</td></tr> :
+           rows.map((m) => {
+            const profit = BigInt(m.profitP);
+            return (
             <tr key={m.id} style={{ borderTop: "1px solid var(--border)" }}>
               <Td><b>{m.name}</b> <span style={{ color: "var(--muted)", fontFamily: "monospace", fontSize: "0.75rem" }}>{m.code}</span></Td>
               <Td><span style={{ color: "var(--muted)", fontSize: "0.78rem" }}>{TIER_AR[m.tier] ?? m.tier}</span></Td>
               <Td>{m.shipmentsCount}</Td>
-              <Td>{m.deliveredCount}</Td>
-              <Td>{m.returnedCount}{m.lostCount > 0 && <span style={{ color: "var(--color-danger)", fontSize: "0.72rem" }}> +{m.lostCount} فقد</span>}</Td>
               <Td><Rate v={m.deliveryRate} good /></Td>
-              <Td><b style={{ color: "var(--color-success)" }}>{egp(m.revenueP)}</b></Td>
-              <Td>{egp(m.avgRevenuePerDeliveredP)}</Td>
+              <Td>{egp(m.revenueP)}</Td>
+              <Td><span style={{ color: "var(--color-warning)" }}>{egp(m.commissionP)}</span></Td>
+              <Td>{BigInt(m.compensationP) > 0n ? <span style={{ color: "var(--color-danger)" }}>{egp(m.compensationP)}</span> : "—"}</Td>
+              <Td><b style={{ color: profit >= 0n ? "var(--color-success)" : "var(--color-danger)" }}>{egp(m.profitP)}</b></Td>
+              <Td><span style={{ fontWeight: 700, color: m.marginPct >= 40 ? "var(--color-success)" : m.marginPct >= 15 ? "var(--color-warning)" : "var(--color-danger)" }}>{m.marginPct}%</span></Td>
             </tr>
-          ))}
+          );})}
         </tbody>
       </table>
     </div>

@@ -9,6 +9,7 @@ import { z } from "zod";
 import { db } from "@/server/db";
 import { formatEGP } from "@/lib/money";
 import { createPickup, assignPickup } from "@/server/services/pickup";
+import { notifyPickupAssigned } from "@/server/services/inappNotify";
 import { requireRole, requireUser } from "@/server/http/context";
 import { ok, fail, handleError } from "@/server/http/respond";
 
@@ -63,6 +64,16 @@ export async function POST(req: NextRequest) {
       });
       return { ...created, status: a.status, assigned: a.assigned, courierId };
     });
+
+    // إشعار المندوب باستلامه الجديد — best-effort بعد الكوميت
+    if (result.courierId) {
+      const cid = result.courierId;
+      void (async () => {
+        try {
+          await notifyPickupAssigned(db, { pickupId: result.pickupId, code: result.code, courierId: cid, ordersCount: result.ordersCount });
+        } catch { /* best-effort */ }
+      })();
+    }
 
     return ok(
       {

@@ -12,6 +12,7 @@ import { TransitionModal } from "../components/TransitionModal";
 import { OrderDetailModal, LabelModal } from "../components/OrderModals";
 import { ProfileCard } from "../components/ProfileCard";
 import { InstallPrompt } from "../components/InstallPrompt";
+import { NotificationBell } from "../components/NotificationBell";
 import { apiCall, toArabicDigits, type ShipmentStatus, type Role } from "../lib/client";
 import { outboxCount, flushOutbox } from "../lib/outbox";
 
@@ -141,7 +142,10 @@ export default function CourierApp() {
           <div style={{ fontSize: "1.2rem", fontWeight: 800 }}>توص<span style={{ color: "var(--color-orange-500)" }}>ّل</span></div>
           <div style={{ fontSize: "0.72rem", opacity: 0.6 }}>{TAB_LABELS[tab]}</div>
         </div>
-        {pending > 0 && <span style={{ fontSize: "0.72rem", fontWeight: 700, color: "#fff", background: "#d97706", padding: "0.25rem 0.6rem", borderRadius: 100 }}>⏳ غير متزامن: {toArabicDigits(pending)}</span>}
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          {pending > 0 && <span style={{ fontSize: "0.72rem", fontWeight: 700, color: "#fff", background: "#d97706", padding: "0.25rem 0.6rem", borderRadius: 100 }}>⏳ غير متزامن: {toArabicDigits(pending)}</span>}
+          <NotificationBell />
+        </div>
       </header>
 
       <main style={{ padding: "1rem" }}>

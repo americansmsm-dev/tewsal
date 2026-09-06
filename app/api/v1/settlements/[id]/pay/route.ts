@@ -3,10 +3,12 @@
  * بيكتب قيد التحويل ويعلّم الشحنات مسوّاة. لازم تكون معتمدة.
  */
 import { type NextRequest } from "next/server";
-import { z } from "zod";
+import { sql } from "drizzle-orm";
 import { db } from "@/server/db";
-import { poundsToPiastres } from "@/lib/money";
+import { z } from "zod";
+import { poundsToPiastres, formatEGP } from "@/lib/money";
 import { paySettlement } from "@/server/services/settlement";
+import { notifySettlementPaid } from "@/server/services/inappNotify";
 import { requirePermission } from "@/server/http/context";
 import { ok, fail, handleError } from "@/server/http/respond";
 
@@ -43,6 +45,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         branchId: parsed.data.branchId ?? null,
       })
     );
+    // إشعار داخلي للتاجر إن مستحقاته اتحوّلت — best-effort بعد الكوميت
+    void (async () => {
+      try {
+        const r = await db.execute(sql`SELECT merchant_id::text AS mid, code, net_payable_p::text AS net FROM settlements WHERE id = ${id}::uuid`);
+        const rows = (Array.isArray(r) ? r : (r as { rows: unknown[] }).rows) as { mid: string; code: string; net: string }[];
+        const row = rows[0];
+        if (row) await notifySettlementPaid(db, { settlementId: id, code: row.code, merchantId: row.mid, netAmount: formatEGP(BigInt(row.net)) });
+      } catch { /* best-effort */ }
+    })();
+
     return ok({ status: result.status, journalEntryNo: result.journalEntryNo.toString() });
   } catch (err) {
     return handleError(err);

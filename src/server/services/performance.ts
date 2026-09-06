@@ -122,16 +122,25 @@ export interface MerchantProfit {
   lostCount: number;
   /** نسبة التسليم من اللي اتحسم */
   deliveryRate: number;
-  /** الإيراد اللي جابه التاجر (شحن + تحصيل + مرتجع + أخرى) */
+  /** إيراد الشركة من التاجر (شحن + تحصيل + مرتجع + أخرى) — شامل رسم التحصيل الأسبوعي */
   revenueP: string;
-  /** متوسط الإيراد لكل شحنة مُسلَّمة */
-  avgRevenuePerDeliveredP: string;
+  /** عمولات المناديب على أوردرات التاجر — تكلفة على الشركة */
+  commissionP: string;
+  /** تعويضات على أوردرات التاجر — تكلفة على الشركة */
+  compensationP: string;
+  /** صافي مكسب الشركة = الإيراد − العمولات − التعويضات */
+  profitP: string;
+  /** نسبة هامش الربح (الربح ÷ الإيراد) */
+  marginPct: number;
+  /** متوسط الربح لكل شحنة مُسلَّمة */
+  avgProfitPerDeliveredP: string;
 }
 
 export async function merchantProfitability(ex: SqlExecutor): Promise<MerchantProfit[]> {
   const rows = rowsOf<{
     id: string; name: string; code: string; tier: string;
-    total: number; delivered: number; returned: number; lost: number; revenue: string;
+    total: number; delivered: number; returned: number; lost: number;
+    revenue: string; commission: string; compensation: string;
   }>(
     await ex.execute(sql`
       WITH ship AS (
@@ -142,10 +151,28 @@ export async function merchantProfitability(ex: SqlExecutor): Promise<MerchantPr
           COUNT(*) FILTER (WHERE status IN ('lost','damaged','disposed'))::int AS lost
         FROM shipments GROUP BY merchant_id
       ),
+      -- إيراد الشركة من التاجر: كل سطر إيراد في قيد بيلمس مستحقات التاجر
+      -- (بيلقط رسوم التسليم لكل أوردر + رسم التحصيل الأسبوعي عند التسوية)
       rev AS (
-        SELECT s.merchant_id, SUM(jl.credit_p - jl.debit_p) AS revenue
+        SELECT a2.owner_id AS merchant_id, SUM(jl.credit_p - jl.debit_p) AS revenue
         FROM journal_lines jl
         JOIN accounts a ON a.id = jl.account_id AND a.type = 'revenue'
+        JOIN journal_lines jlm ON jlm.entry_id = jl.entry_id
+        JOIN accounts a2 ON a2.id = jlm.account_id AND a2.code = 'MERCHANT_PAYABLE'
+        GROUP BY a2.owner_id
+      ),
+      -- عمولات المناديب على أوردرات التاجر (من جدول بنود العمولة)
+      comm AS (
+        SELECT s.merchant_id, SUM(cci.amount_p) AS commission
+        FROM courier_commission_items cci
+        JOIN shipments s ON s.id = cci.shipment_id
+        GROUP BY s.merchant_id
+      ),
+      -- تعويضات على أوردرات التاجر
+      comp AS (
+        SELECT s.merchant_id, SUM(jl.debit_p - jl.credit_p) AS compensation
+        FROM journal_lines jl
+        JOIN accounts a ON a.id = jl.account_id AND a.code = 'COMPENSATION_EXPENSE'
         JOIN shipments s ON s.id = jl.shipment_id
         GROUP BY s.merchant_id
       )
@@ -154,18 +181,25 @@ export async function merchantProfitability(ex: SqlExecutor): Promise<MerchantPr
              COALESCE(sh.delivered, 0) AS delivered,
              COALESCE(sh.returned, 0) AS returned,
              COALESCE(sh.lost, 0) AS lost,
-             COALESCE(r.revenue, 0)::text AS revenue
+             COALESCE(r.revenue, 0)::text AS revenue,
+             COALESCE(cm.commission, 0)::text AS commission,
+             COALESCE(cp.compensation, 0)::text AS compensation
       FROM merchants m
       LEFT JOIN ship sh ON sh.merchant_id = m.id
       LEFT JOIN rev r ON r.merchant_id = m.id
+      LEFT JOIN comm cm ON cm.merchant_id = m.id
+      LEFT JOIN comp cp ON cp.merchant_id = m.id
       WHERE COALESCE(sh.total, 0) > 0
-      ORDER BY COALESCE(r.revenue, 0) DESC, name
+      ORDER BY (COALESCE(r.revenue, 0) - COALESCE(cm.commission, 0) - COALESCE(cp.compensation, 0)) DESC, name
     `)
   );
   return rows.map((r) => {
     const revenue = BigInt(r.revenue);
+    const commission = BigInt(r.commission);
+    const compensation = BigInt(r.compensation);
+    const profit = revenue - commission - compensation;
     const resolved = r.delivered + r.returned + r.lost;
-    const avg = r.delivered > 0 ? revenue / BigInt(r.delivered) : 0n;
+    const avg = r.delivered > 0 ? profit / BigInt(r.delivered) : 0n;
     return {
       id: r.id,
       name: r.name,
@@ -177,7 +211,11 @@ export async function merchantProfitability(ex: SqlExecutor): Promise<MerchantPr
       lostCount: r.lost,
       deliveryRate: pct(r.delivered, resolved),
       revenueP: revenue.toString(),
-      avgRevenuePerDeliveredP: avg.toString(),
+      commissionP: commission.toString(),
+      compensationP: compensation.toString(),
+      profitP: profit.toString(),
+      marginPct: revenue > 0n ? pct(Number(profit), Number(revenue)) : 0,
+      avgProfitPerDeliveredP: avg.toString(),
     };
   });
 }
