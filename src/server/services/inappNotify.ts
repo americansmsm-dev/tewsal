@@ -74,6 +74,12 @@ export interface NotifyInput {
   entityType?: string | null;
   entityId?: string | null;
   createdBy?: string | null;
+  /**
+   * ينتظر إرسال الدفع للأجهزة قبل ما يرجّع.
+   * **للسكربتات القصيرة بس** (باك أب · فحوصات ليلية) — لأنها
+   * بتقفل الاتصال وتخرج على طول. الـAPI بيسيبه فاير-آند-فورجت.
+   */
+  awaitPush?: boolean;
 }
 
 /**
@@ -99,11 +105,16 @@ export async function notifyUsers(ex: SqlExecutor, input: NotifyInput): Promise<
   `);
   const reached = rowsOf<{ user_id: string }>(res).map((r) => r.user_id);
 
-  // ⚠️ الدفع للأجهزة **بعد** ما الصف اتكتب، ومن غير انتظار —
-  //    الإشعار عمره ما يوقّف عملية شغل. ولو الدفع مش متظبط
-  //    (مفيش مفاتيح VAPID) الدالة بترجع من غير ما تعمل حاجة.
+  // ⚠️ الدفع للأجهزة **بعد** ما الصف اتكتب. في الـAPI بيمشي من
+  //    غير انتظار — الإشعار عمره ما يوقّف عملية شغل. ولو الدفع
+  //    مش متظبط (مفيش مفاتيح VAPID) الدالة بترجع من غير ما تعمل حاجة.
+  //
+  //    ⚠️ لكن في **السكربتات** لازم ننتظر: السكربت بيقفل الاتصال
+  //    ويخرج فورًا، فالفان-آوت اللي لسه شغّال بيقع بـ
+  //    CONNECTION_ENDED والإشعار مايوصلش الأجهزة. عشان كده
+  //    awaitPush.
   if (reached.length > 0) {
-    void pushToUsers(ex, reached, {
+    const fanout = pushToUsers(ex, reached, {
       event: input.event,
       title: input.titleAr,
       body: input.bodyAr,
@@ -111,7 +122,10 @@ export async function notifyUsers(ex: SqlExecutor, input: NotifyInput): Promise<
       entityId: input.entityId ?? null,
     }).catch((err) => {
       console.error("[push] فان-آوت فشل:", err instanceof Error ? err.message : err);
+      return 0;
     });
+    if (input.awaitPush) await fanout;
+    else void fanout;
   }
   return reached.length;
 }
@@ -436,5 +450,7 @@ export async function notifyOps(
     bodyAr: input.bodyAr,
     entityType: null,
     entityId: null,
+    // بيتنده من السكربتات المجدولة — لازم ننتظر الدفع قبل الخروج
+    awaitPush: true,
   });
 }
