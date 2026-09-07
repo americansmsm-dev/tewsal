@@ -173,8 +173,9 @@ export async function postEntry(
 
   let entryId: string;
   let entryNo: bigint;
+  let entryDate: string;
   try {
-    const inserted = rowsOf<{ id: string; entry_no: string }>(
+    const inserted = rowsOf<{ id: string; entry_no: string; entry_date: string }>(
       await ex.execute(sql`
         INSERT INTO journal_entries
           (description_ar, source_type, source_id, kind, created_by, entry_date, is_reversal, reversal_reason)
@@ -188,12 +189,13 @@ export async function postEntry(
           ${draft.kind.endsWith("_reversal")},
           ${draft.kind.endsWith("_reversal") ? draft.descriptionAr : null}
         )
-        RETURNING id, entry_no
+        RETURNING id, entry_no, entry_date::text
       `)
     );
     if (!inserted[0]) throw new Error("مقدرناش نكتب القيد");
     entryId = inserted[0].id;
     entryNo = BigInt(inserted[0].entry_no);
+    entryDate = inserted[0].entry_date;
   } catch (err) {
     if (isUniqueViolation(err, "je_source_kind_uq")) {
       throw new Error(
@@ -221,20 +223,157 @@ export async function postEntry(
     `);
   }
 
-  // رصيد التاجر المعروض لازم يتحدّث في **نفس** الترانزاكشن —
-  // لو اتحدّث بعدين، هيبقى فيه لحظة التاجر شايف فيها رقم غلط.
-  const merchants = new Set(
-    draft.lines
-      .map((l) => (l.account.code === "MERCHANT_PAYABLE" ? l.account.ownerId : null))
-      .filter((id): id is string => !!id)
-  );
-  for (const merchantId of merchants) {
-    await recomputeMerchantBalance(ex, merchantId);
+  // ═══ رصيد التاجر — تحديث **تزايدي** في نفس الترانزاكشن ═══
+  //
+  // ⚠️ قبل كده كل قيد كان بيعيد حساب الرصيد من **أول الدفتر كله**
+  //    (كل سطور مستحقات التاجر + كل عهد كل المناديب من بداية
+  //    التشغيل) جوّه قفل الصف. يعني كل ما الدفتر يكبر، كل تسليم
+  //    يبقى أبطأ — تعقيد تربيعي بيوقّع السيستم عند الحجم الكبير.
+  //
+  //    دلوقتي بنحسب **الفرق** من سطور القيد نفسه (في الذاكرة أصلًا)
+  //    ونضيفه على الرصيد المخزّن. الاستثناء الوحيد: تسليم العهدة،
+  //    لأنه بيحوّل كل المعلّق للمندوب ده إلى «مؤكد» — وساعتها
+  //    بنعدّل التجار المتأثرين **بس** مش كل التجار.
+  //
+  //    الحارس: فحص I4 الليلي بيقارن المخزَّن بالمشتق من الدفتر،
+  //    و`recomputeMerchantBalance` لسه موجودة للمصالحة الكاملة.
+  if (draft.kind === "handover") {
+    const courierId = draft.lines.find((l) => l.account.code === "COURIER_CASH")?.account.ownerId;
+    if (courierId) await confirmPendingOnHandover(ex, entryId, courierId, entryDate);
+  } else {
+    // صافي حركة المستحقات لكل تاجر في القيد ده
+    const deltas = new Map<string, bigint>();
+    for (const l of draft.lines) {
+      if (l.account.code !== "MERCHANT_PAYABLE" || !l.account.ownerId) continue;
+      deltas.set(l.account.ownerId, (deltas.get(l.account.ownerId) ?? 0n) + (l.creditP - l.debitP));
+    }
+    if (deltas.size > 0) {
+      // العكوسات نادرة ومعقّدة — نعيد الحساب الكامل فيها للأمان
+      const isReversal = draft.kind.endsWith("_reversal");
+      if (isReversal) {
+        for (const merchantId of deltas.keys()) await recomputeMerchantBalance(ex, merchantId);
+      } else {
+        // القيد «تحت التحصيل» لو فيه كاش مع مندوب ماسلّمش عهدته لسه
+        const pending = await isEntryPending(ex, entryId, entryDate);
+        for (const [merchantId, delta] of deltas) {
+          await applyBalanceDelta(ex, merchantId, delta, pending ? delta : 0n);
+        }
+      }
+    }
   }
 
   // ⚠️ التوازن بيتفحص من قاعدة البيانات عند COMMIT
   //    (constraint trigger DEFERRABLE) — مش من هنا.
   return { entryId, entryNo };
+}
+
+// ---------------------------------------------------------------
+// التحديث التزايدي لرصيد التاجر
+// ---------------------------------------------------------------
+
+/**
+ * بيضيف **فرق** على رصيد التاجر المخزّن بدل ما يعيد حسابه من
+ * الدفتر كله. عملية O(1) على صف واحد.
+ *
+ * المخزَّن خانتين: «مؤكد» و«تحت التحصيل». الإجمالي = مجموعهم،
+ * فالمؤكد بيتحرّك بـ (الإجمالي − تحت التحصيل).
+ */
+async function applyBalanceDelta(
+  ex: SqlExecutor,
+  merchantId: string,
+  totalDeltaP: bigint,
+  inCollectionDeltaP: bigint
+): Promise<void> {
+  const confirmedDeltaP = totalDeltaP - inCollectionDeltaP;
+  if (confirmedDeltaP === 0n && inCollectionDeltaP === 0n) return;
+  await ex.execute(sql`
+    INSERT INTO merchant_balances
+      (merchant_id, payable_confirmed_p, payable_in_collection_p, last_recomputed_at)
+    VALUES (${merchantId}::uuid, ${confirmedDeltaP.toString()}::bigint,
+            ${inCollectionDeltaP.toString()}::bigint, now())
+    ON CONFLICT (merchant_id) DO UPDATE SET
+      payable_confirmed_p     = merchant_balances.payable_confirmed_p + EXCLUDED.payable_confirmed_p,
+      payable_in_collection_p = merchant_balances.payable_in_collection_p + EXCLUDED.payable_in_collection_p,
+      last_recomputed_at      = now()
+  `);
+}
+
+/**
+ * القيد ده «تحت التحصيل»؟ يعني فيه كاش دخل جيب مندوب لسه
+ * ماسلّمش عهدته بعد تاريخ القيد. نفس قاعدة إعادة الحساب
+ * الكاملة بالظبط — بس على القيد ده لوحده.
+ */
+async function isEntryPending(ex: SqlExecutor, entryId: string, entryDate: string): Promise<boolean> {
+  const rows = rowsOf<{ pending: boolean }>(
+    await ex.execute(sql`
+      SELECT EXISTS (
+        SELECT 1
+        FROM journal_lines cash
+        JOIN accounts ca ON ca.id = cash.account_id AND ca.code = 'COURIER_CASH'
+        LEFT JOIN LATERAL (
+          SELECT MAX(je2.entry_date) AS confirmed_until
+          FROM journal_entries je2
+          JOIN journal_lines jl2 ON jl2.entry_id = je2.id
+          JOIN accounts a2 ON a2.id = jl2.account_id
+            AND a2.code = 'COURIER_CASH' AND a2.owner_id = ca.owner_id
+          WHERE je2.kind = 'handover'
+        ) lh ON true
+        WHERE cash.entry_id = ${entryId}::uuid
+          AND cash.debit_p > 0
+          AND (lh.confirmed_until IS NULL OR ${entryDate}::timestamptz > lh.confirmed_until)
+      ) AS pending
+    `)
+  );
+  return rows[0]?.pending === true;
+}
+
+/**
+ * تسليم العهدة بيأكّد كل الكاش اللي كان مع المندوب ده.
+ * بنقلب القيود اللي كانت معلّقة (بعد آخر عهدة سابقة ولحد
+ * تاريخ العهدة دي) من «تحت التحصيل» لـ«مؤكد» — للتجار
+ * المتأثرين **بس**، مش لكل التجار.
+ */
+async function confirmPendingOnHandover(
+  ex: SqlExecutor,
+  entryId: string,
+  courierId: string,
+  entryDate: string
+): Promise<void> {
+  const rows = rowsOf<{ merchant_id: string; amount_p: string }>(
+    await ex.execute(sql`
+      WITH prev AS (
+        -- آخر عهدة مؤكدة للمندوب ده **قبل** العهدة الحالية
+        SELECT COALESCE(MAX(je.entry_date), '-infinity'::timestamptz) AS d
+        FROM journal_entries je
+        JOIN journal_lines jl ON jl.entry_id = je.id
+        JOIN accounts a ON a.id = jl.account_id
+          AND a.code = 'COURIER_CASH' AND a.owner_id = ${courierId}::uuid
+        WHERE je.kind = 'handover' AND je.id <> ${entryId}::uuid
+      ),
+      flipped AS (
+        -- القيود اللي كانت معلّقة وبقت مؤكدة بالعهدة دي
+        SELECT DISTINCT jl.entry_id
+        FROM journal_lines jl
+        JOIN accounts a ON a.id = jl.account_id
+          AND a.code = 'COURIER_CASH' AND a.owner_id = ${courierId}::uuid
+        JOIN journal_entries je ON je.id = jl.entry_id
+        CROSS JOIN prev
+        WHERE jl.debit_p > 0
+          AND je.entry_date > prev.d
+          AND je.entry_date <= ${entryDate}::timestamptz
+      )
+      SELECT a.owner_id::text AS merchant_id,
+             SUM(jl.credit_p - jl.debit_p)::text AS amount_p
+      FROM journal_lines jl
+      JOIN accounts a ON a.id = jl.account_id AND a.code = 'MERCHANT_PAYABLE'
+      WHERE jl.entry_id IN (SELECT entry_id FROM flipped) AND a.owner_id IS NOT NULL
+      GROUP BY a.owner_id
+    `)
+  );
+  for (const r of rows) {
+    // الإجمالي ماتغيّرش — بس اتنقل من «تحت التحصيل» لـ«مؤكد»
+    await applyBalanceDelta(ex, r.merchant_id, 0n, -BigInt(r.amount_p));
+  }
 }
 
 // ---------------------------------------------------------------

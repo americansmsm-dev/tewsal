@@ -21,6 +21,8 @@
     "e2e:ui": "playwright test --ui",
     "verify:guards": "tsx scripts/verify-route-guards.ts",
     "verify:untested-core": "tsx scripts/verify-untested-core.ts",
+    "verify:balance": "tsx scripts/verify-balance-incremental.ts",
+    "bench:balance": "tsx scripts/bench-balance.ts",
     "invariants": "tsx scripts/invariants.ts",
     "daily-report": "tsx scripts/daily-report.ts",
     "backup": "tsx scripts/backup.ts",
