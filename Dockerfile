@@ -55,6 +55,12 @@ COPY --from=builder --chown=tewsal:nodejs /app/tsconfig.json ./tsconfig.json
 COPY --chown=tewsal:nodejs docker-entrypoint.sh ./docker-entrypoint.sh
 RUN chmod +x ./docker-entrypoint.sh
 
+# ⚠️ مجلد النسخ الاحتياطية لازم يتعمل **هنا** وبملكية المستخدم —
+#    الحاوية بتشتغل بمستخدم مش root، و/app ملك root، فالسكربت
+#    كان بيقع بـ EACCES وهو بيحاول يعمل المجلد وقت التشغيل.
+#    وده كمان نقطة التركيب لو حبيت تربط volume ثابت عليه.
+RUN mkdir -p /app/backups && chown tewsal:nodejs /app/backups
+
 USER tewsal
 EXPOSE 3000
 ENV PORT=3000 HOSTNAME=0.0.0.0
