@@ -55,11 +55,17 @@ export function NotificationBell() {
 
   // إغلاق القايمة لما تدوس بره
   useEffect(() => {
-    function onDoc(e: MouseEvent) {
+    function onDoc(e: Event) {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     }
-    if (open) document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
+    if (open) {
+      document.addEventListener("mousedown", onDoc);
+      document.addEventListener("touchstart", onDoc);
+    }
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("touchstart", onDoc);
+    };
   }, [open]);
 
   async function markRead(id: string) {
@@ -94,11 +100,9 @@ export function NotificationBell() {
       </button>
 
       {open && (
-        <div style={{
-          position: "absolute", insetInlineEnd: 0, top: "calc(100% + 8px)", width: 340, maxWidth: "90vw",
-          background: "var(--surface)", color: "var(--ink)", border: "1px solid var(--border)",
-          borderRadius: 12, boxShadow: "0 10px 30px rgba(0,0,0,0.25)", zIndex: 50, overflow: "hidden",
-        }}>
+        // ⚠️ التنسيق في globals.css — على الفون بيتحوّل لشيت بعرض
+        //    الشاشة بدل لوح ٣٤٠px كان بيتقص من حرف الشاشة
+        <div className="bell-panel">
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.7rem 0.9rem", borderBottom: "1px solid var(--border)" }}>
             <span style={{ fontWeight: 800, fontSize: "0.9rem" }}>الإشعارات</span>
             {unread > 0 && (
@@ -107,7 +111,7 @@ export function NotificationBell() {
               </button>
             )}
           </div>
-          <div style={{ maxHeight: 360, overflowY: "auto" }}>
+          <div className="bell-list">
             {items.length === 0 ? (
               <div style={{ padding: "2rem 1rem", textAlign: "center", color: "var(--muted)", fontSize: "0.85rem" }}>
                 مفيش إشعارات

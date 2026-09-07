@@ -186,3 +186,83 @@
     border: 1px solid var(--border);
   }
 }
+
+/* ============================================================
+ *  الموبايل — الهيدر وقايمة الجرس
+ * ------------------------------------------------------------
+ *  ⚠️ المشكلة اللي اتقاست فعليًا: محتوى الهيدر محتاج **٤٤٧px**
+ *     بينما الفون ٣٦٠–٣٩٠px — فبيفيض والشكل بيتقطّع.
+ *     الحل: نشيل اللي مش ضروري على الشاشة الصغيرة (سطر
+ *     «نظام إدارة الشحنات» واسم الدور) ونقصّر الاسم.
+ *
+ *  وقايمة الجرس كانت لوح ٣٤٠px ملزوق في الجرس نفسه، فبيتقص
+ *  من حرف الشاشة. على الموبايل بقت شيت بعرض الشاشة تحت الهيدر.
+ *
+ *  التنسيقات دي اتنقلت من inline styles للكلاسات بقصد — عشان
+ *  الـmedia query تقدر تغلبها من غير !important.
+ * ============================================================ */
+@layer components {
+  .app-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 0.75rem 1.25rem;
+    background: var(--color-navy-900);
+    color: #fff;
+    position: sticky;
+    top: 0;
+    z-index: 20;
+  }
+  .app-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .bell-panel {
+    position: absolute;
+    inset-inline-end: 0;
+    top: calc(100% + 8px);
+    width: 340px;
+    max-width: 90vw;
+    background: var(--surface);
+    color: var(--ink);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+    z-index: 50;
+    overflow: hidden;
+  }
+  .bell-list {
+    max-height: 360px;
+    overflow-y: auto;
+  }
+
+  @media (max-width: 640px) {
+    .app-header { padding: 0.6rem 0.75rem; gap: 6px; }
+    .app-header-actions { gap: 6px; }
+    /* السطرين دول رفاهية على الديسكتوب وزحمة على الفون */
+    .app-header-sub,
+    .app-header-role { display: none; }
+    .app-header-name {
+      max-width: 6rem;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    /* شيت بعرض الشاشة بدل لوح بيتقص من الحرف */
+    .bell-panel {
+      position: fixed;
+      inset-inline: 8px;
+      top: 54px;
+      width: auto;
+      max-width: none;
+    }
+    .bell-list { max-height: 62vh; }
+
+    /* هوامش الصفحة أضيق — ٤٠px من ٣٦٠ كانت بتاكل المحتوى */
+    .page-main { padding: 0.9rem 0.75rem; }
+  }
+}

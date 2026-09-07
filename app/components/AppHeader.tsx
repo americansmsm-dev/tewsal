@@ -49,27 +49,17 @@ export function AppHeader({ user }: { user: CurrentUser }) {
   }
 
   return (
-    <header
-      style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        padding: "0.75rem 1.25rem",
-        background: "var(--color-navy-900)",
-        color: "#fff",
-        position: "sticky",
-        top: 0,
-        zIndex: 20,
-      }}
-    >
-      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+    // ⚠️ التنسيق في globals.css مش inline — عشان الـmedia query
+    //    تقدر تخفي الزيادة على الفون (المحتوى كان محتاج ٤٤٧px)
+    <header className="app-header">
+      <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
         <span style={{ fontSize: "1.35rem", fontWeight: 800, letterSpacing: "-0.02em" }}>
           <span style={{ color: "var(--color-orange-500)" }}>توصّل</span>
         </span>
-        <span style={{ fontSize: "0.8rem", opacity: 0.6 }}>نظام إدارة الشحنات</span>
+        <span className="app-header-sub" style={{ fontSize: "0.8rem", opacity: 0.6 }}>نظام إدارة الشحنات</span>
       </div>
 
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      <div className="app-header-actions">
         <NotificationBell />
         <button
           onClick={toggleTheme}
@@ -79,9 +69,9 @@ export function AppHeader({ user }: { user: CurrentUser }) {
         >
           {dark ? "☀️" : "🌙"}
         </button>
-        <div style={{ textAlign: "left", lineHeight: 1.2 }}>
-          <div style={{ fontWeight: 700, fontSize: "0.85rem" }}>{user.name}</div>
-          <div style={{ fontSize: "0.7rem", opacity: 0.6 }}>{user.roleLabel}</div>
+        <div style={{ textAlign: "left", lineHeight: 1.2, minWidth: 0 }}>
+          <div className="app-header-name" style={{ fontWeight: 700, fontSize: "0.85rem" }}>{user.name}</div>
+          <div className="app-header-role" style={{ fontSize: "0.7rem", opacity: 0.6 }}>{user.roleLabel}</div>
         </div>
         <button
           onClick={logout}

@@ -57,7 +57,7 @@ export default function NotificationsPage() {
     <div style={{ minHeight: "100vh" }}>
       <AppHeader user={user} />
       <AppNav role={user.role} />
-      <main style={{ maxWidth: 820, margin: "0 auto", padding: "1.25rem" }}>
+      <main className="page-main" style={{ maxWidth: 820, margin: "0 auto", padding: "1.25rem" }}>
         <h2 style={{ margin: "0 0 1rem", fontSize: "1.15rem" }}>الإشعارات</h2>
 
         <DeviceSettings />
@@ -231,7 +231,8 @@ function DeviceSettings() {
     <div className="card" style={{ padding: "0.9rem 1.1rem", marginBottom: "1.25rem" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
         <span style={{ fontSize: "1.2rem" }}>🔔</span>
-        <div style={{ flex: 1, minWidth: 200 }}>
+        {/* minWidth صغيّر عشان النص يلفّ بدل ما يزقّ الأزرار برّه الشاشة */}
+        <div style={{ flex: "1 1 12rem", minWidth: 0 }}>
           <div style={{ fontWeight: 700, fontSize: "0.92rem" }}>إشعارات الجهاز</div>
           <div style={{ fontSize: "0.78rem", color: "var(--muted)", lineHeight: 1.6 }}>{hint}</div>
         </div>
@@ -255,8 +256,8 @@ function DeviceSettings() {
       {open && devices.length > 0 && (
         <div style={{ marginTop: 10, borderTop: "1px solid var(--border)", paddingTop: 8 }}>
           {devices.map((d) => (
-            <div key={d.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "0.35rem 0", fontSize: "0.82rem" }}>
-              <span style={{ flex: 1 }}>
+            <div key={d.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "0.35rem 0", fontSize: "0.82rem", flexWrap: "wrap" }}>
+              <span style={{ flex: "1 1 10rem", minWidth: 0 }}>
                 <b>{d.device_label ?? "جهاز"}</b>
                 <span style={{ color: "var(--muted)", fontSize: "0.74rem" }}>
                   {" · آخر ظهور "}{new Date(d.last_seen_at).toLocaleString("ar-EG")}
