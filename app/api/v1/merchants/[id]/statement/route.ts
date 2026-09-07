@@ -24,7 +24,7 @@ import { sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/server/db";
 import { formatEGP } from "@/lib/money";
-import { recomputeMerchantBalance } from "@/server/services/ledger";
+import { readMerchantBalance } from "@/server/services/ledger";
 import { requireUser } from "@/server/http/context";
 import { ok, fail, handleError, notFound } from "@/server/http/respond";
 
@@ -65,8 +65,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       to ? sql`AND je.entry_date <= ${to}::timestamptz` : sql``
     }`;
 
-    // ⚠️ الأرصدة (الخانتين) بتتحسب من الدفتر لحظيًا — مش متأثرة بفلتر الفترة
-    const balance = await db.transaction((tx) => recomputeMerchantBalance(tx, merchantId));
+    // ⚠️ الأرصدة (الخانتين) مخزّنة ومتحدّثة مع كل قيد — مش متأثرة
+    //    بفلتر الفترة. قراءة بحتة: مفيش ترانزاكشن كاتبة في GET.
+    const balance = await readMerchantBalance(db, merchantId);
 
     // آخر الحركات — تفصيل الممل لكل أوردر
     const lines = rowsOf<{

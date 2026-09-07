@@ -13,8 +13,12 @@ const MGMT = ["super_admin", "branch_manager", "accountant", "ops"] as const;
 export async function GET(req: NextRequest) {
   try {
     await requireRole(req, MGMT);
-    const couriers = await courierScorecard(db);
-    return ok({ couriers, count: couriers.length });
+    // فترة إجبارية — الافتراضي ٩٠ يوم (شوف reportPeriod.ts)
+    const p = new URL(req.url).searchParams;
+    const { rows, period } = await courierScorecard(db, {
+      from: p.get("from"), to: p.get("to"), days: p.get("days"),
+    });
+    return ok({ couriers: rows, count: rows.length, period });
   } catch (err) {
     return handleError(err);
   }

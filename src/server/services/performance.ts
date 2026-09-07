@@ -13,6 +13,7 @@
  */
 import { sql } from "drizzle-orm";
 import type { SqlExecutor } from "./ledger";
+import { resolvePeriod, type ReportPeriod } from "./reportPeriod";
 
 function rowsOf<T>(r: unknown): T[] {
   if (Array.isArray(r)) return r as T[];
@@ -48,7 +49,11 @@ export interface CourierScore {
   lastDeliveryAt: string | null;
 }
 
-export async function courierScorecard(ex: SqlExecutor): Promise<CourierScore[]> {
+export async function courierScorecard(
+  ex: SqlExecutor,
+  opts?: { from?: string | null; to?: string | null; days?: number | string | null }
+): Promise<{ rows: CourierScore[]; period: ReportPeriod }> {
+  const period = resolvePeriod(opts);
   const rows = rowsOf<{
     id: string; name: string; delivered: number; first_attempt: number;
     returned: number; last_delivery: string | null; held: string; commission: string; deductions: string;
@@ -60,9 +65,14 @@ export async function courierScorecard(ex: SqlExecutor): Promise<CourierScore[]>
           COUNT(*) FILTER (WHERE status IN ('delivered','partially_delivered') AND attempts_count = 0)::int AS first_attempt,
           COUNT(*) FILTER (WHERE status = 'returned_to_merchant')::int AS returned,
           MAX(delivered_at)::text AS last_delivery
-        FROM shipments WHERE current_courier_id IS NOT NULL
+        FROM shipments
+        WHERE current_courier_id IS NOT NULL
+          AND created_at >= ${period.from}::timestamptz AND created_at < ${period.to}::timestamptz
         GROUP BY current_courier_id
       ),
+      -- ⚠️ العهدة والعمولة المستحقة **رصيد جاري** مش أداء فترة —
+      --    بيتحسبوا تراكميًا زي ما هما (وده الصح: الكاش اللي مع
+      --    المندوب دلوقتي مالوش علاقة بتاريخ بدايته).
       cash AS (
         SELECT a.owner_id AS courier_id, SUM(jl.debit_p - jl.credit_p) AS held
         FROM journal_lines jl JOIN accounts a ON a.id = jl.account_id AND a.code = 'COURIER_CASH'
@@ -93,18 +103,21 @@ export async function courierScorecard(ex: SqlExecutor): Promise<CourierScore[]>
       ORDER BY COALESCE(s.delivered, 0) DESC, name
     `)
   );
-  return rows.map((r) => ({
-    id: r.id,
-    name: r.name,
-    deliveredCount: r.delivered,
-    returnedCount: r.returned,
-    firstAttemptRate: pct(r.first_attempt, r.delivered),
-    returnRate: pct(r.returned, r.delivered + r.returned),
-    cashHeldP: r.held,
-    commissionsP: r.commission,
-    deductionsP: r.deductions,
-    lastDeliveryAt: r.last_delivery,
-  }));
+  return {
+    period,
+    rows: rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      deliveredCount: r.delivered,
+      returnedCount: r.returned,
+      firstAttemptRate: pct(r.first_attempt, r.delivered),
+      returnRate: pct(r.returned, r.delivered + r.returned),
+      cashHeldP: r.held,
+      commissionsP: r.commission,
+      deductionsP: r.deductions,
+      lastDeliveryAt: r.last_delivery,
+    })),
+  };
 }
 
 // ---------------------------------------------------------------
@@ -136,7 +149,12 @@ export interface MerchantProfit {
   avgProfitPerDeliveredP: string;
 }
 
-export async function merchantProfitability(ex: SqlExecutor): Promise<MerchantProfit[]> {
+export async function merchantProfitability(
+  ex: SqlExecutor,
+  opts?: { from?: string | null; to?: string | null; days?: number | string | null; limit?: number }
+): Promise<{ rows: MerchantProfit[]; period: ReportPeriod }> {
+  const period = resolvePeriod(opts);
+  const limit = Math.min(Math.max(Number(opts?.limit) || 200, 1), 500);
   const rows = rowsOf<{
     id: string; name: string; code: string; tier: string;
     total: number; delivered: number; returned: number; lost: number;
@@ -149,7 +167,15 @@ export async function merchantProfitability(ex: SqlExecutor): Promise<MerchantPr
           COUNT(*) FILTER (WHERE status IN ('delivered','partially_delivered'))::int AS delivered,
           COUNT(*) FILTER (WHERE status = 'returned_to_merchant')::int AS returned,
           COUNT(*) FILTER (WHERE status IN ('lost','damaged','disposed'))::int AS lost
-        FROM shipments GROUP BY merchant_id
+        FROM shipments
+        WHERE created_at >= ${period.from}::timestamptz AND created_at < ${period.to}::timestamptz
+        GROUP BY merchant_id
+      ),
+      -- كل القيود جوّه الفترة — الأساس اللي كل حسابات الإيراد
+      -- والتعويض بتترشّح عليه بدل مسح الدفتر كله
+      je_win AS (
+        SELECT id FROM journal_entries
+        WHERE entry_date >= ${period.from}::timestamptz AND entry_date < ${period.to}::timestamptz
       ),
       -- ⚠️ قيد التسليم بيلمس «مستحقات التاجر» **مرتين** (دائن بالتحصيل
       --    ومدين بالرسوم). لو عملنا JOIN مباشر على سطور المستحقات،
@@ -159,6 +185,7 @@ export async function merchantProfitability(ex: SqlExecutor): Promise<MerchantPr
         SELECT DISTINCT jlm.entry_id, a2.owner_id AS merchant_id
         FROM journal_lines jlm
         JOIN accounts a2 ON a2.id = jlm.account_id AND a2.code = 'MERCHANT_PAYABLE'
+        JOIN je_win w ON w.id = jlm.entry_id
         WHERE a2.owner_id IS NOT NULL
       ),
       -- إيراد الشركة من التاجر: رسوم التسليم لكل أوردر + رسم التحصيل
@@ -175,6 +202,7 @@ export async function merchantProfitability(ex: SqlExecutor): Promise<MerchantPr
         SELECT s.merchant_id, SUM(cci.amount_p) AS commission
         FROM courier_commission_items cci
         JOIN shipments s ON s.id = cci.shipment_id
+        WHERE s.created_at >= ${period.from}::timestamptz AND s.created_at < ${period.to}::timestamptz
         GROUP BY s.merchant_id
       ),
       -- تعويضات على أوردرات التاجر
@@ -182,6 +210,7 @@ export async function merchantProfitability(ex: SqlExecutor): Promise<MerchantPr
         SELECT s.merchant_id, SUM(jl.debit_p - jl.credit_p) AS compensation
         FROM journal_lines jl
         JOIN accounts a ON a.id = jl.account_id AND a.code = 'COMPENSATION_EXPENSE'
+        JOIN je_win w ON w.id = jl.entry_id
         JOIN shipments s ON s.id = jl.shipment_id
         GROUP BY s.merchant_id
       )
@@ -200,9 +229,10 @@ export async function merchantProfitability(ex: SqlExecutor): Promise<MerchantPr
       LEFT JOIN comp cp ON cp.merchant_id = m.id
       WHERE COALESCE(sh.total, 0) > 0
       ORDER BY (COALESCE(r.revenue, 0) - COALESCE(cm.commission, 0) - COALESCE(cp.compensation, 0)) DESC, name
+      LIMIT ${limit}
     `)
   );
-  return rows.map((r) => {
+  const mapped = rows.map((r) => {
     const revenue = BigInt(r.revenue);
     const commission = BigInt(r.commission);
     const compensation = BigInt(r.compensation);
@@ -227,4 +257,5 @@ export async function merchantProfitability(ex: SqlExecutor): Promise<MerchantPr
       avgProfitPerDeliveredP: avg.toString(),
     };
   });
+  return { rows: mapped, period };
 }

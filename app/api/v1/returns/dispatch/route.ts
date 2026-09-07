@@ -59,7 +59,10 @@ export async function POST(req: NextRequest) {
           courierId,
           count: result.dispatched,
         });
-      } catch { /* best-effort */ }
+      } catch (err) {
+        // الإشعار مايوقّفش العملية — بس الفشل بيتسجّل مش بيتبلع
+        console.error("[notify] فشل إشعار تحميل مرتجعات:", err instanceof Error ? err.message : err);
+      }
     })();
 
     return ok(result, 201);

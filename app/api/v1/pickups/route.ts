@@ -71,7 +71,10 @@ export async function POST(req: NextRequest) {
       void (async () => {
         try {
           await notifyPickupAssigned(db, { pickupId: result.pickupId, code: result.code, courierId: cid, ordersCount: result.ordersCount });
-        } catch { /* best-effort */ }
+        } catch (err) {
+        // الإشعار مايوقّفش العملية — بس الفشل بيتسجّل مش بيتبلع
+        console.error("[notify] فشل إشعار طلب استلام:", err instanceof Error ? err.message : err);
+      }
       })();
     }
 

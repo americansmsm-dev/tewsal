@@ -388,6 +388,32 @@ export interface MerchantBalance {
 }
 
 /**
+ * قراءة الرصيد المخزَّن — **من غير أي كتابة**.
+ *
+ * ⚠️ كشف الحساب كان بيفتح ترانزاكشن **كاتبة** في كل فتحة صفحة
+ *    (إعادة حساب + UPSERT) فبيتنافس على نفس قفل صف التاجر مع
+ *    التسليمات الجارية. دلوقتي الرصيد بيتحدّث تزايديًا مع كل
+ *    قيد، فالقراءة بقت قراءة بحتة.
+ *
+ * التاجر اللي لسه مافيش عليه أي حركة مالوش صف — رصيده صفر.
+ */
+export async function readMerchantBalance(
+  ex: SqlExecutor,
+  merchantId: string
+): Promise<MerchantBalance> {
+  const rows = rowsOf<{ c: string; i: string }>(
+    await ex.execute(sql`
+      SELECT payable_confirmed_p::text AS c, payable_in_collection_p::text AS i
+      FROM merchant_balances WHERE merchant_id = ${merchantId}::uuid
+    `)
+  );
+  return {
+    confirmedP: BigInt(rows[0]?.c ?? "0"),
+    inCollectionP: BigInt(rows[0]?.i ?? "0"),
+  };
+}
+
+/**
  * إعادة احتساب رصيد التاجر من الدفتر وتخزينه.
  *
  * ⚠️ الخانتين هما أهم حاجة بيشوفها التاجر. **الرقم المؤكد

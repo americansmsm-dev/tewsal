@@ -89,6 +89,22 @@ export async function isBlacklisted(ex: SqlExecutor, phone: string): Promise<boo
   return (r?.n ?? 0) > 0;
 }
 
+/**
+ * نسخة مجمّعة — الاستيراد كان بيسأل عن كل رقم لوحده (٢٠٠٠ استعلام
+ * لدفعة واحدة). دي بتسأل مرة واحدة وترجّع الأرقام المحظورة بس.
+ */
+export async function blacklistedPhones(ex: SqlExecutor, phones: string[]): Promise<Set<string>> {
+  const clean = [...new Set(phones.map((p) => normalizeEgyptMobile(p)).filter((p): p is string => !!p))];
+  if (clean.length === 0) return new Set();
+  const rows = rowsOf<{ phone: string }>(
+    await ex.execute(sql`
+      SELECT phone FROM customer_blacklist
+      WHERE phone = ANY(${sql`ARRAY[${sql.join(clean.map((p) => sql`${p}`), sql`, `)}]`})
+    `)
+  );
+  return new Set(rows.map((r) => r.phone));
+}
+
 export async function addBlacklist(
   ex: SqlExecutor,
   input: { phone: string; reason: string; actorUserId: string | null }

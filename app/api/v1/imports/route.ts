@@ -36,9 +36,12 @@ export async function POST(req: NextRequest) {
     if (action === "preview") {
       return ok(await previewImport(db, { merchantId, rows }));
     }
-    const result = await db.transaction((tx) =>
-      commitImport(tx, { merchantId, rows, actor: { userId: ctx.user.userId, role: ctx.user.role, name: ctx.user.fullName } })
-    );
+    // ⚠️ من غير db.transaction هنا بقصد — commitImport بيقسّم على
+    // دفعات مستقلة، وكل دفعة ترانزاكشن لوحدها.
+    const result = await commitImport(db, {
+      merchantId, rows,
+      actor: { userId: ctx.user.userId, role: ctx.user.role, name: ctx.user.fullName },
+    });
     return ok(result, 201);
   } catch (err) { return handleError(err); }
 }

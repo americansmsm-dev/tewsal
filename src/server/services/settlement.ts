@@ -20,7 +20,7 @@
 import { sql } from "drizzle-orm";
 import { calcCodFee, type CodPercentBasis, type Piastres } from "@/lib/money";
 import { ACC, buildPayoutEntry, buildMerchantChargeEntry } from "../domain/ledger";
-import { postEntry, recomputeMerchantBalance, type SqlExecutor } from "./ledger";
+import { postEntry, type SqlExecutor } from "./ledger";
 import { HttpError } from "../http/respond";
 
 async function stringSetting(ex: SqlExecutor, key: string, fallback: string): Promise<string> {
@@ -207,15 +207,25 @@ export async function runSettlement(
 
   // البنود + قفل الشحنات (is_settled بيتعمل عند الدفع مش دلوقتي —
   // عشان لو التسوية اتلغت الشحنات ترجع للـ pool)
-  for (const e of eligible) {
+  //
+  // ⚠️ كان استعلامين **لكل شحنة**: تاجر عليه ٣٠٠٠ أوردر = ٦٠٠٠
+  //    ذهاب وعودة للقاعدة في ترانزاكشن واحدة. دلوقتي استعلامين
+  //    لكل ٥٠٠ صف (الدفعة عشان مانتعدّاش حد البارامترات).
+  const ITEM_CHUNK = 500;
+  for (let i = 0; i < eligible.length; i += ITEM_CHUNK) {
+    const part = eligible.slice(i, i + ITEM_CHUNK);
     await ex.execute(sql`
       INSERT INTO settlement_items (settlement_id, shipment_id, cod_collected_p, fees_p, net_p)
-      VALUES (${settlement.id}::uuid, ${e.id}::uuid,
-              ${(e.cod_collected_p ?? "0")}::bigint, ${e.total_fees_p}::bigint, ${e.net_p}::bigint)
+      VALUES ${sql.join(
+        part.map((e) => sql`(${settlement.id}::uuid, ${e.id}::uuid,
+          ${(e.cod_collected_p ?? "0")}::bigint, ${e.total_fees_p}::bigint, ${e.net_p}::bigint)`),
+        sql`, `
+      )}
     `);
-    // نربط الشحنة بالتسوية بس من غير ما نعلّمها مدفوعة
+    // نربط الشحنات بالتسوية بس من غير ما نعلّمها مدفوعة
     await ex.execute(sql`
-      UPDATE shipments SET settlement_id = ${settlement.id}::uuid WHERE id = ${e.id}::uuid
+      UPDATE shipments SET settlement_id = ${settlement.id}::uuid
+      WHERE id = ANY(${sql`ARRAY[${sql.join(part.map((e) => sql`${e.id}::uuid`), sql`, `)}]`})
     `);
   }
 
@@ -341,8 +351,8 @@ export async function paySettlement(
     WHERE settlement_id = ${input.settlementId}::uuid
   `);
 
-  // تحديث رصيد التاجر المعروض
-  await recomputeMerchantBalance(ex, s.merchant_id);
+  // رصيد التاجر بيتحدّث تزايديًا جوّه postEntry من قيد الدفع نفسه —
+  // مافيش إعادة حساب كاملة (كانت بتمسح دفتر التاجر كله كل تسوية).
 
   return { status: "paid", journalEntryNo: posted.entryNo };
 }

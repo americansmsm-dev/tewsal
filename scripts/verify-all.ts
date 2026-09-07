@@ -129,8 +129,18 @@ async function main() {
       .filter((f) => f.startsWith("verify-") && f.endsWith(".ts"))
       .map((f) => f.replace(/\.ts$/, ""))
       .filter((n) => !SKIP.has(n))
-      .filter((n) => ONLY.length === 0 || ONLY.includes(n.replace(/^verify-/, "")))
+      // --only بيقبل الاسم بالبادئة أو من غيرها — الاتنين
+      .filter((n) => ONLY.length === 0 || ONLY.includes(n) || ONLY.includes(n.replace(/^verify-/, "")))
       .sort();
+
+    // ⚠️ صفر سكربت مش نجاح — غالبًا اسم غلط في --only
+    if (all.length === 0) {
+      throw new Error(
+        ONLY.length
+          ? `مفيش سكربت مطابق لـ --only=${ONLY.join(",")}`
+          : "مالقيتش أي سكربت verify-*.ts في مجلد scripts"
+      );
+    }
 
     console.log(`\n${"═".repeat(62)}\n  ${all.length} سكربت — كل واحد على قاعدة نضيفة\n${"═".repeat(62)}\n`);
 

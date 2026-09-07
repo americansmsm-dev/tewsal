@@ -238,10 +238,17 @@ export async function POST(
           const m = await db.execute(sql`SELECT merchant_id::text AS mid FROM shipments WHERE id = ${shipmentId}::uuid`);
           const mid = (Array.isArray(m) ? m : (m as { rows: { mid: string }[] }).rows)[0]?.mid as string | undefined;
           if (mid) await fireWebhooks(db, { merchantId: mid, event: String(appliedTo), payload: { awb: result.res.awb, status: appliedTo, shipmentId } });
-        } catch { /* best-effort */ }
+        } catch (err) {
+          // ⚠️ مش بنوقّف الرد على الإشعار — بس الفشل الصامت كان
+          //    بيخلّي إشعار ضايع مايبانش خالص. دلوقتي بيتسجّل.
+          console.error("[notify] فشل إشعار تحويل الحالة:", result.res.awb, err instanceof Error ? err.message : err);
+        }
       })();
       // إشعار العميل (واتساب أو محاكاة) — نفس النمط best-effort
-      void (async () => { try { await notifyStatusChange(db, { shipmentId, event: String(appliedTo) }); } catch { /* best-effort */ } })();
+      void (async () => {
+      try { await notifyStatusChange(db, { shipmentId, event: String(appliedTo) }); }
+      catch (err) { console.error("[notify] فشل إشعار واتساب:", err instanceof Error ? err.message : err); }
+    })();
     }
 
     // إشعار داخلي للتاجر والمندوب المسند (لكل انتقال مش replay) — best-effort

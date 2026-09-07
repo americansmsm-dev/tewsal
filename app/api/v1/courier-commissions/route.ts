@@ -94,7 +94,10 @@ export async function POST(req: NextRequest) {
     void (async () => {
       try {
         await notifyCommission(db, { commissionId: result.id, code: result.code, courierId, total: formatEGP(result.totalP), count: result.count });
-      } catch { /* best-effort */ }
+      } catch (err) {
+        // الإشعار مايوقّفش العملية — بس الفشل بيتسجّل مش بيتبلع
+        console.error("[notify] فشل إشعار عمولة المندوب:", err instanceof Error ? err.message : err);
+      }
     })();
 
     return ok({ id: result.id, code: result.code, count: result.count, deliveries: result.deliveries, returns: result.returns, total: formatEGP(result.totalP) }, 201);

@@ -15,6 +15,7 @@
  */
 import { sql } from "drizzle-orm";
 import type { SqlExecutor } from "./ledger";
+import { resolvePeriod, type ReportPeriod } from "./reportPeriod";
 
 function rowsOf<T>(r: unknown): T[] {
   if (Array.isArray(r)) return r as T[];
@@ -96,8 +97,16 @@ export interface ProfitAndLoss {
   netProfitP: string;
 }
 
-/** الأرباح والخسائر: الإيراد (دائن) − المصروف (مدين) = الربح. */
-export async function profitAndLoss(ex: SqlExecutor): Promise<ProfitAndLoss> {
+/**
+ * الأرباح والخسائر: الإيراد (دائن) − المصروف (مدين) = الربح.
+ * ⚠️ تقرير **فترة** بطبيعته — كان بيجمع من أول يوم تشغيل من غير
+ *    حد (مسح للدفتر كله). الافتراضي دلوقتي آخر ٩٠ يوم.
+ */
+export async function profitAndLoss(
+  ex: SqlExecutor,
+  opts?: { from?: string | null; to?: string | null; days?: number | string | null }
+): Promise<ProfitAndLoss & { period: ReportPeriod }> {
+  const period = resolvePeriod(opts);
   const rows = rowsOf<{ code: string; name_ar: string; type: string; amount: string }>(
     await ex.execute(sql`
       SELECT a.code, MIN(a.name_ar) AS name_ar, a.type,
@@ -105,7 +114,13 @@ export async function profitAndLoss(ex: SqlExecutor): Promise<ProfitAndLoss> {
                   THEN COALESCE(SUM(jl.credit_p - jl.debit_p), 0)
                   ELSE COALESCE(SUM(jl.debit_p - jl.credit_p), 0) END::text AS amount
       FROM accounts a
-      LEFT JOIN journal_lines jl ON jl.account_id = a.id
+      LEFT JOIN (
+        SELECT jl.account_id, jl.debit_p, jl.credit_p
+        FROM journal_lines jl
+        JOIN journal_entries je ON je.id = jl.entry_id
+        WHERE je.entry_date >= ${period.from}::timestamptz
+          AND je.entry_date <  ${period.to}::timestamptz
+      ) jl ON jl.account_id = a.id
       WHERE a.type IN ('revenue', 'expense')
       GROUP BY a.code, a.type
       HAVING COALESCE(SUM(jl.debit_p), 0) <> 0 OR COALESCE(SUM(jl.credit_p), 0) <> 0
@@ -119,20 +134,30 @@ export async function profitAndLoss(ex: SqlExecutor): Promise<ProfitAndLoss> {
     if (r.type === "revenue") { revenue.push(line); tr += BigInt(r.amount); }
     else { expense.push(line); te += BigInt(r.amount); }
   }
-  return { revenue, expense, totalRevenueP: tr.toString(), totalExpenseP: te.toString(), netProfitP: (tr - te).toString() };
+  return { revenue, expense, totalRevenueP: tr.toString(), totalExpenseP: te.toString(), netProfitP: (tr - te).toString(), period };
 }
 
 // ---------------------------------------------------------------
 // الإيرادات حسب النوع
 // ---------------------------------------------------------------
 
-export async function revenueByType(ex: SqlExecutor): Promise<{ rows: PnlLine[]; totalP: string }> {
+export async function revenueByType(
+  ex: SqlExecutor,
+  opts?: { from?: string | null; to?: string | null; days?: number | string | null }
+): Promise<{ rows: PnlLine[]; totalP: string; period: ReportPeriod }> {
+  const period = resolvePeriod(opts);
   const rows = rowsOf<{ code: string; name_ar: string; amount: string }>(
     await ex.execute(sql`
       SELECT a.code, MIN(a.name_ar) AS name_ar,
              COALESCE(SUM(jl.credit_p - jl.debit_p), 0)::text AS amount
       FROM accounts a
-      LEFT JOIN journal_lines jl ON jl.account_id = a.id
+      LEFT JOIN (
+        SELECT jl.account_id, jl.debit_p, jl.credit_p
+        FROM journal_lines jl
+        JOIN journal_entries je ON je.id = jl.entry_id
+        WHERE je.entry_date >= ${period.from}::timestamptz
+          AND je.entry_date <  ${period.to}::timestamptz
+      ) jl ON jl.account_id = a.id
       WHERE a.type = 'revenue'
       GROUP BY a.code
       ORDER BY COALESCE(SUM(jl.credit_p - jl.debit_p), 0) DESC
@@ -140,7 +165,7 @@ export async function revenueByType(ex: SqlExecutor): Promise<{ rows: PnlLine[];
   );
   let total = 0n;
   const out: PnlLine[] = rows.map((r) => { total += BigInt(r.amount); return { code: r.code, nameAr: r.name_ar, amountP: r.amount }; });
-  return { rows: out, totalP: total.toString() };
+  return { rows: out, totalP: total.toString(), period };
 }
 
 // ---------------------------------------------------------------

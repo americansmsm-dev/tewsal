@@ -24,9 +24,19 @@ const TIER_AR: Record<string, string> = { t1: "الأولى", t2: "الثاني�
 
 type Tab = "accounting" | "journal" | "couriers" | "merchants" | "ops" | "aging";
 
+/** خيارات الفترة — التقارير بقت محدودة بنافذة زمنية عشان
+ *  ماتمسحش الدفتر كله في كل فتحة صفحة (شوف reportPeriod.ts) */
+const PERIODS: { days: number; label: string }[] = [
+  { days: 30, label: "٣٠ يوم" },
+  { days: 90, label: "٩٠ يوم" },
+  { days: 180, label: "٦ شهور" },
+  { days: 365, label: "سنة" },
+];
+
 export default function ReportsPage() {
   const user = useCurrentUser();
   const [tab, setTab] = useState<Tab>("accounting");
+  const [days, setDays] = useState(90);
 
   if (!user) return <Loading />;
   const isFinance = ["super_admin", "branch_manager", "accountant"].includes(user.role);
@@ -51,7 +61,8 @@ export default function ReportsPage() {
         <h2 style={{ margin: "0 0 0.25rem", fontSize: "1.15rem" }}>التقارير</h2>
         <p style={{ margin: "0 0 1rem", color: "var(--muted)", fontSize: "0.83rem", lineHeight: 1.7 }}>
           كل الأرقام هنا <b>مشتقّة من الدفتر المحاسبي</b> مباشرة — يعني مفيش رقم متكتب بالإيد، وكله يتطابق مع فلوسك الفعلية.
-          الأرقام <b>من بداية التشغيل لحد دلوقتي</b>. كل قسم تحته سطر بيشرح الرقم معناه إيه.
+          الأرقام <b>عن الفترة اللي تختارها</b> (افتراضي آخر ٩٠ يوم) — ما عدا ميزان المراجعة وأرصدة العهدة، دول تراكميين بطبيعتهم.
+          كل قسم تحته سطر بيشرح الرقم معناه إيه.
         </p>
 
         <div style={{ display: "flex", gap: 4, marginBottom: "1.25rem", flexWrap: "wrap" }}>
@@ -67,10 +78,26 @@ export default function ReportsPage() {
           ))}
         </div>
 
-        {activeTab === "accounting" && <AccountingTab />}
+        {["accounting", "couriers", "merchants"].includes(activeTab) && (
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: "1rem", flexWrap: "wrap" }}>
+            <span style={{ fontSize: "0.8rem", color: "var(--muted)" }}>الفترة:</span>
+            {PERIODS.map((p) => (
+              <button
+                key={p.days}
+                onClick={() => setDays(p.days)}
+                className={days === p.days ? "btn btn-primary" : "btn btn-ghost"}
+                style={{ padding: "0.3rem 0.8rem", fontSize: "0.8rem" }}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {activeTab === "accounting" && <AccountingTab days={days} />}
         {activeTab === "journal" && <JournalTab />}
-        {activeTab === "couriers" && <CouriersTab />}
-        {activeTab === "merchants" && <MerchantsTab />}
+        {activeTab === "couriers" && <CouriersTab days={days} />}
+        {activeTab === "merchants" && <MerchantsTab days={days} />}
         {activeTab === "ops" && <OpsTab />}
         {activeTab === "aging" && (
           <div className="card" style={{ padding: "1.5rem", textAlign: "center" }}>
@@ -88,15 +115,16 @@ interface Pnl { revenue: { code: string; nameAr: string; amountP: string }[]; ex
 interface Trial { rows: { code: string; nameAr: string; type: string; debitP: string; creditP: string; balanceP: string }[]; totalDebitP: string; totalCreditP: string; balanced: boolean }
 interface Rev { rows: { code: string; nameAr: string; amountP: string }[]; totalP: string }
 
-function AccountingTab() {
+function AccountingTab({ days }: { days: number }) {
   const [data, setData] = useState<{ trial: Trial; pnl: Pnl; revenue: Rev } | null>(null);
   const [loading, setLoading] = useState(true);
   useEffect(() => {
-    apiCall<{ trial: Trial; pnl: Pnl; revenue: Rev }>("GET", "/api/v1/reports/accounting").then((r) => {
+    setLoading(true);
+    apiCall<{ trial: Trial; pnl: Pnl; revenue: Rev }>("GET", `/api/v1/reports/accounting?days=${days}`).then((r) => {
       if (r.ok && r.data) setData(r.data);
       setLoading(false);
     });
-  }, []);
+  }, [days]);
   if (loading) return <Muted>جاري التحميل...</Muted>;
   if (!data) return <Muted>مفيش بيانات</Muted>;
 
@@ -218,15 +246,16 @@ function JournalTab() {
 // ─── المناديب ───
 interface CScore { id: string; name: string; deliveredCount: number; returnedCount: number; firstAttemptRate: number; returnRate: number; cashHeldP: string; commissionsP: string; deductionsP: string; lastDeliveryAt: string | null }
 
-function CouriersTab() {
+function CouriersTab({ days }: { days: number }) {
   const [rows, setRows] = useState<CScore[]>([]);
   const [loading, setLoading] = useState(true);
   useEffect(() => {
-    apiCall<{ couriers: CScore[] }>("GET", "/api/v1/reports/couriers").then((r) => {
+    setLoading(true);
+    apiCall<{ couriers: CScore[] }>("GET", `/api/v1/reports/couriers?days=${days}`).then((r) => {
       if (r.ok && r.data) setRows(r.data.couriers);
       setLoading(false);
     });
-  }, []);
+  }, [days]);
   if (loading) return <Muted>جاري التحميل...</Muted>;
 
   const totalDelivered = rows.reduce((s, c) => s + c.deliveredCount, 0);
@@ -273,15 +302,16 @@ function CouriersTab() {
 // ─── التجار ───
 interface MProfit { id: string; name: string; code: string; tier: string; shipmentsCount: number; deliveredCount: number; returnedCount: number; lostCount: number; deliveryRate: number; revenueP: string; commissionP: string; compensationP: string; profitP: string; marginPct: number; avgProfitPerDeliveredP: string }
 
-function MerchantsTab() {
+function MerchantsTab({ days }: { days: number }) {
   const [rows, setRows] = useState<MProfit[]>([]);
   const [loading, setLoading] = useState(true);
   useEffect(() => {
-    apiCall<{ merchants: MProfit[] }>("GET", "/api/v1/reports/merchants").then((r) => {
+    setLoading(true);
+    apiCall<{ merchants: MProfit[] }>("GET", `/api/v1/reports/merchants?days=${days}`).then((r) => {
       if (r.ok && r.data) setRows(r.data.merchants);
       setLoading(false);
     });
-  }, []);
+  }, [days]);
   if (loading) return <Muted>جاري التحميل...</Muted>;
 
   const totalRev = rows.reduce((s, m) => s + BigInt(m.revenueP), 0n);

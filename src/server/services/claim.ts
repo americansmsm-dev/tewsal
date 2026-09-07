@@ -14,7 +14,7 @@
 import { sql } from "drizzle-orm";
 import type { Piastres } from "@/lib/money";
 import { buildCompensationEntry } from "../domain/ledger";
-import { postEntry, recomputeMerchantBalance, type SqlExecutor } from "./ledger";
+import { postEntry, type SqlExecutor } from "./ledger";
 import { type Actor } from "./transition";
 import { HttpError } from "../http/respond";
 
@@ -175,7 +175,6 @@ export async function resolveClaim(
     await ex.execute(sql`
       UPDATE claims SET compensation_entry_id = ${entry.entryId}::uuid WHERE id = ${input.claimId}::uuid
     `);
-    await recomputeMerchantBalance(ex, c.merchant_id);
     posted = true;
   }
 

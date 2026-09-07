@@ -52,7 +52,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         const rows = (Array.isArray(r) ? r : (r as { rows: unknown[] }).rows) as { mid: string; code: string; net: string }[];
         const row = rows[0];
         if (row) await notifySettlementPaid(db, { settlementId: id, code: row.code, merchantId: row.mid, netAmount: formatEGP(BigInt(row.net)) });
-      } catch { /* best-effort */ }
+      } catch (err) {
+        // الإشعار مايوقّفش العملية — بس الفشل بيتسجّل مش بيتبلع
+        console.error("[notify] فشل إشعار دفع تسوية:", err instanceof Error ? err.message : err);
+      }
     })();
 
     return ok({ status: result.status, journalEntryNo: result.journalEntryNo.toString() });

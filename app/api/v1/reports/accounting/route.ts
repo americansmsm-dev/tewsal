@@ -14,12 +14,16 @@ const FINANCE = ["super_admin", "branch_manager", "accountant"] as const;
 export async function GET(req: NextRequest) {
   try {
     await requireRole(req, FINANCE);
+    // الأرباح والإيرادات تقارير **فترة** (افتراضي ٩٠ يوم).
+    // ميزان المراجعة تراكمي بطبيعته — بيفضل من غير فترة.
+    const p = new URL(req.url).searchParams;
+    const win = { from: p.get("from"), to: p.get("to"), days: p.get("days") };
     const [trial, pnl, revenue] = await Promise.all([
       trialBalance(db),
-      profitAndLoss(db),
-      revenueByType(db),
+      profitAndLoss(db, win),
+      revenueByType(db, win),
     ]);
-    return ok({ trial, pnl, revenue });
+    return ok({ trial, pnl, revenue, period: pnl.period });
   } catch (err) {
     return handleError(err);
   }

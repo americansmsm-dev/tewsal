@@ -100,7 +100,11 @@ export async function GET(req: NextRequest) {
     const merchantId = url.searchParams.get("merchantId");
     const q = url.searchParams.get("q");
     const limit = Math.min(Number(url.searchParams.get("limit") ?? 50), 200);
-    const cursor = url.searchParams.get("cursor"); // created_at ISO للصفحة الجاية
+    // المؤشر = "created_at|id". الاستيراد بيعمل صفوف بنفس الثانية،
+    // فالمؤشر على created_at لوحده كان بيتخطّى صفوف أو يكرّرها.
+    // بنقبل الشكل القديم (created_at بس) عشان صفحة مفتوحة ماتقعش.
+    const cursor = url.searchParams.get("cursor");
+    const [cursorAt, cursorId] = cursor ? [cursor.split("|")[0]!, cursor.split("|")[1] ?? null] : [null, null];
 
     if (statuses.some((s) => !(SHIPMENT_STATUSES as readonly string[]).includes(s))) {
       return fail("BAD_REQUEST", "حالة غير معروفة", 400);
@@ -132,13 +136,21 @@ export async function GET(req: NextRequest) {
         ${statuses.length ? sql`AND s.status IN (${sql.join(statuses.map((s) => sql`${s}`), sql`, `)})` : sql``}
         ${merchantId ? sql`AND s.merchant_id = ${merchantId}::uuid` : sql``}
         ${q ? sql`AND (s.awb ILIKE ${"%" + q + "%"} OR s.recipient_name ILIKE ${"%" + q + "%"} OR s.recipient_phone ILIKE ${"%" + q + "%"})` : sql``}
-        ${cursor ? sql`AND s.created_at < ${cursor}` : sql``}
+        ${cursorAt
+          ? cursorId
+            ? sql`AND (s.created_at, s.id) < (${cursorAt}::timestamptz, ${cursorId}::uuid)`
+            : sql`AND s.created_at < ${cursorAt}`
+          : sql``}
         ${roleScope}
-      ORDER BY s.created_at DESC
+      ORDER BY s.created_at DESC, s.id DESC
       LIMIT ${limit}
     `);
     const list = (Array.isArray(rows) ? rows : (rows as { rows: Record<string, unknown>[] }).rows) as Record<string, unknown>[];
-    const nextCursor = list.length === limit ? list[list.length - 1]?.created_at : null;
+    const last = list[list.length - 1];
+    const nextCursor =
+      list.length === limit && last
+        ? `${last.created_at instanceof Date ? last.created_at.toISOString() : String(last.created_at)}|${String(last.id)}`
+        : null;
 
     return ok({ shipments: list, count: list.length, nextCursor });
   } catch (err) {

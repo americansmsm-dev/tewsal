@@ -13,7 +13,7 @@
 import { sql } from "drizzle-orm";
 import type { Piastres } from "@/lib/money";
 import { buildHandoverEntry, ACC } from "../domain/ledger";
-import { postEntry, accountBalance, recomputeMerchantBalance, type SqlExecutor } from "./ledger";
+import { postEntry, accountBalance, type SqlExecutor } from "./ledger";
 import { HttpError } from "../http/respond";
 
 function rowsOf<T>(r: unknown): T[] {
@@ -56,8 +56,6 @@ export async function recordHandover(
   if (variance < 0n && !input.varianceNote?.trim()) {
     throw new HttpError(422, "SHORTAGE_NEEDS_NOTE", "العجز محتاج سبب مكتوب");
   }
-
-  const merchantsBefore = await merchantsWithCourierCash(ex, input.courierId);
 
   const entry = buildHandoverEntry({
     handoverId: crypto.randomUUID(), // مؤقت — بيتحط الحقيقي تحت
@@ -102,11 +100,10 @@ export async function recordHandover(
     `);
   }
 
-  // ⚠️ تسليم العهدة بيأكّد كاش المناديب → لازم نعيد حساب أرصدة
-  //    التجار المتأثرين (اللي كانت شحناتهم تحت التحصيل عند ده)
-  for (const merchantId of merchantsBefore) {
-    await recomputeMerchantBalance(ex, merchantId);
-  }
+  // ⚠️ تسليم العهدة بيأكّد كاش المناديب → أرصدة التجار المتأثرين
+  //    بتتقلب من «تحت التحصيل» لـ«مؤكد» **جوّه postEntry** تزايديًا
+  //    (confirmPendingOnHandover). مافيش إعادة حساب كاملة هنا —
+  //    كانت بتمسح الدفتر كله لكل تاجر متأثر.
 
   return {
     handoverId: ho.id,
@@ -119,21 +116,6 @@ export async function recordHandover(
 }
 
 /** التجار اللي عندهم كاش لسه في عهدة المندوب ده */
-async function merchantsWithCourierCash(ex: SqlExecutor, courierId: string): Promise<string[]> {
-  const rows = rowsOf<{ merchant_id: string }>(
-    await ex.execute(sql`
-      SELECT DISTINCT mp.owner_id AS merchant_id
-      FROM journal_entries je
-      JOIN journal_lines cash ON cash.entry_id = je.id
-      JOIN accounts ca ON ca.id = cash.account_id AND ca.code = 'COURIER_CASH' AND ca.owner_id = ${courierId}::uuid
-      JOIN journal_lines ml ON ml.entry_id = je.id
-      JOIN accounts mp ON mp.id = ml.account_id AND mp.code = 'MERCHANT_PAYABLE'
-      WHERE cash.debit_p > 0
-    `)
-  );
-  return rows.map((r) => r.merchant_id);
-}
-
 /** أرصدة كاش المناديب — للوحة الخزينة */
 export async function courierCashBalances(
   ex: SqlExecutor

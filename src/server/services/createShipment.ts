@@ -45,6 +45,28 @@ function rowsOf<T>(result: unknown): T[] {
   return [];
 }
 
+/**
+ * كاش التسعير — الاستيراد المجمّع بيعمل نفس الشحنة ٢٠٠٠ مرة، وكل
+ * مرة كان بيقرا قائمة الأسعار وتعريفات الرسوم والإعدادات من أول
+ * وجديد (٦ استعلامات ثابتة × ٢٠٠٠ صف). الكاش ده بيقراهم **مرة
+ * واحدة** لكل دفعة استيراد.
+ *
+ * ⚠️ عمره قصير بقصد — دفعة واحدة وبس. لو التاجر غيّر السعر جوّه
+ * الاستيراد، الدفعة الجارية بتكمّل بالسعر اللي بدأت بيه (وده
+ * الصح: سعر موحّد لكل الدفعة).
+ */
+export interface PricingCache {
+  priceList?: PriceListEntry[];
+  merchantOverrides: Map<string, MerchantPriceOverride[]>;
+  feeDefs?: FeeDefinition[];
+  feeOverrides?: FeeOverride[];
+  settings: Map<string, unknown>;
+}
+
+export function newPricingCache(): PricingCache {
+  return { merchantOverrides: new Map(), settings: new Map() };
+}
+
 export interface CreateShipmentInput {
   merchantId: string;
   recipientName: string;
@@ -89,7 +111,9 @@ export interface CreateShipmentResult {
 export async function createShipment(
   ex: SqlExecutor,
   input: CreateShipmentInput,
-  actor: Actor
+  actor: Actor,
+  /** اختياري — للاستيراد المجمّع بس. الاستدعاء العادي بيسيبه فاضي. */
+  cache?: PricingCache
 ): Promise<CreateShipmentResult> {
   // ═══ ١) التاجر ═══
   const merchant = rowsOf<{
@@ -163,15 +187,16 @@ export async function createShipment(
 
   // ═══ ٥) حساب السعر والرسوم ═══
   const [priceList, priceOverrides, feeDefs, feeOverrides] = await Promise.all([
-    loadPriceList(ex),
-    loadMerchantOverrides(ex, merchant.id),
-    loadFeeDefs(ex),
-    loadFeeOverrides(ex),
+    cached(cache, "priceList", () => loadPriceList(ex)),
+    cachedOverrides(cache, merchant.id, () => loadMerchantOverrides(ex, merchant.id)),
+    cached(cache, "feeDefs", () => loadFeeDefs(ex)),
+    cached(cache, "feeOverrides", () => loadFeeOverrides(ex)),
   ]);
 
-  const allowedOpenPieces = await numberSetting(ex, "shipment.allowed_open_pieces", 2);
+  const allowedOpenPieces = await numberSetting(ex, "shipment.allowed_open_pieces", 2, cache);
   // رسوم التحصيل: settlement = مرة واحدة على إجمالي الفاتورة (الافتراضي) · shipment = على كل أوردر
-  const codFeeAtSettlement = (await stringSetting(ex, "cod_fee.charge_at", "settlement")) === "settlement";
+  const codFeeAtSettlement =
+    (await stringSetting(ex, "cod_fee.charge_at", "settlement", cache)) === "settlement";
 
   const pricingInput: ShipmentPricingInput = {
     merchantId: merchant.id,
@@ -428,19 +453,57 @@ async function loadFeeOverrides(ex: SqlExecutor): Promise<FeeOverride[]> {
   }));
 }
 
-async function stringSetting(ex: SqlExecutor, key: string, fallback: string): Promise<string> {
+// ---------------------------------------------------------------
+// الكاش — بيرجّع المخزَّن لو موجود، وإلا بيحمّل ويخزّن
+// ---------------------------------------------------------------
+
+async function cached<K extends "priceList" | "feeDefs" | "feeOverrides">(
+  cache: PricingCache | undefined,
+  key: K,
+  load: () => Promise<NonNullable<PricingCache[K]>>
+): Promise<NonNullable<PricingCache[K]>> {
+  if (!cache) return load();
+  const hit = cache[key];
+  if (hit) return hit as NonNullable<PricingCache[K]>;
+  const value = await load();
+  cache[key] = value;
+  return value;
+}
+
+async function cachedOverrides(
+  cache: PricingCache | undefined,
+  merchantId: string,
+  load: () => Promise<MerchantPriceOverride[]>
+): Promise<MerchantPriceOverride[]> {
+  if (!cache) return load();
+  const hit = cache.merchantOverrides.get(merchantId);
+  if (hit) return hit;
+  const value = await load();
+  cache.merchantOverrides.set(merchantId, value);
+  return value;
+}
+
+async function rawSetting(ex: SqlExecutor, key: string, cache?: PricingCache): Promise<unknown> {
+  if (cache?.settings.has(key)) return cache.settings.get(key);
   const rows = rowsOf<{ value: unknown }>(
     await ex.execute(sql`SELECT value FROM settings WHERE key = ${key} LIMIT 1`)
   );
   const v = rows[0]?.value;
+  cache?.settings.set(key, v);
+  return v;
+}
+
+async function stringSetting(
+  ex: SqlExecutor, key: string, fallback: string, cache?: PricingCache
+): Promise<string> {
+  const v = await rawSetting(ex, key, cache);
   return typeof v === "string" && v ? v : fallback;
 }
 
-async function numberSetting(ex: SqlExecutor, key: string, fallback: number): Promise<number> {
-  const rows = rowsOf<{ value: unknown }>(
-    await ex.execute(sql`SELECT value FROM settings WHERE key = ${key} LIMIT 1`)
-  );
-  const v = rows[0]?.value;
+async function numberSetting(
+  ex: SqlExecutor, key: string, fallback: number, cache?: PricingCache
+): Promise<number> {
+  const v = await rawSetting(ex, key, cache);
   const n = typeof v === "number" ? v : Number(v);
   return Number.isFinite(n) ? n : fallback;
 }

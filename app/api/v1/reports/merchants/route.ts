@@ -13,8 +13,13 @@ const MGMT = ["super_admin", "branch_manager", "accountant", "ops"] as const;
 export async function GET(req: NextRequest) {
   try {
     await requireRole(req, MGMT);
-    const merchants = await merchantProfitability(db);
-    return ok({ merchants, count: merchants.length });
+    // فترة إجبارية — الافتراضي ٩٠ يوم (شوف reportPeriod.ts)
+    const p = new URL(req.url).searchParams;
+    const { rows, period } = await merchantProfitability(db, {
+      from: p.get("from"), to: p.get("to"), days: p.get("days"),
+      limit: Number(p.get("limit")) || undefined,
+    });
+    return ok({ merchants: rows, count: rows.length, period });
   } catch (err) {
     return handleError(err);
   }

@@ -15,7 +15,7 @@
 import { sql } from "drizzle-orm";
 import type { Piastres } from "@/lib/money";
 import { buildPickupFeeEntry } from "../domain/ledger";
-import { postEntry, recomputeMerchantBalance, type SqlExecutor } from "./ledger";
+import { postEntry, type SqlExecutor } from "./ledger";
 import { applyTransition, type Actor } from "./transition";
 import { HttpError } from "../http/respond";
 
@@ -219,7 +219,6 @@ export async function confirmPickup(
     await ex.execute(sql`
       UPDATE pickups SET journal_entry_id = ${posted.entryId}::uuid WHERE id = ${input.pickupId}::uuid
     `);
-    await recomputeMerchantBalance(ex, p.merchant_id);
     feeCharged = true;
   }
 

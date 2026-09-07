@@ -39,6 +39,14 @@ services:
       # النسخ الاحتياطي — الوجهة المحلية وعدد النسخ المحتفظ بيها
       BACKUP_DIR: ${BACKUP_DIR:-/backups}
       BACKUP_RETAIN: ${BACKUP_RETAIN:-28}
+      # القدرة — الحوض والمهلات (شوف .env.production.example)
+      DB_POOL_MAX: ${DB_POOL_MAX:-20}
+      DB_STATEMENT_TIMEOUT_MS: ${DB_STATEMENT_TIMEOUT_MS:-30000}
+      DB_LOCK_TIMEOUT_MS: ${DB_LOCK_TIMEOUT_MS:-10000}
+      DB_IDLE_TX_TIMEOUT_MS: ${DB_IDLE_TX_TIMEOUT_MS:-60000}
+      IMPORT_CHUNK_SIZE: ${IMPORT_CHUNK_SIZE:-100}
+      PGBOUNCER: ${PGBOUNCER:-}
+      DB_STARTUP_TIMEOUTS: ${DB_STARTUP_TIMEOUTS:-}
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3000/api/health"]
       interval: 30s
