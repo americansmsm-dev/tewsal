@@ -79,5 +79,39 @@ const client = postgres(connectionString, {
 
 export const db = drizzle(client, { schema, logger: process.env.DB_LOG === "1" });
 
-export { schema, client };
+/**
+ * حوض منفصل **للتقارير الثقيلة**.
+ *
+ * ⚠️ الدرس من قياس الحمل على مليون شحنة: تقرير واحد بيمسح
+ *    الدفتر كان بياخد اتصالات من الحوض الرئيسي، فجدول الشحنات
+ *    اللي بيرد في ٢١ms بقى بيرد في ٦ ثواني — مش لأنه بطيء، لأنه
+ *    **مستني في الطابور**. الموظف بيقول «السيستم واقف» وهو
+ *    شغّال، بس التقرير واكل الحوض.
+ *
+ * دلوقتي التقارير ليها حوض صغير خاص بيها: مهما اتفتح منها كام
+ * واحد في نفس الوقت، الشغل اليومي (شحنات · تحويلات · تتبع)
+ * بيفضل ليه اتصالاته كاملة. والمهلة أطول شوية لأن التقرير
+ * بطبيعته أبطأ.
+ */
+const reportClient = postgres(connectionString, {
+  max: num("DB_REPORT_POOL_MAX", 4),
+  idle_timeout: num("DB_IDLE_TIMEOUT_S", 20),
+  connect_timeout: num("DB_CONNECT_TIMEOUT_S", 10),
+  prepare: !behindPooler,
+  connection: {
+    application_name: (process.env.DB_APP_NAME ?? "tewsal") + "-reports",
+    ...(process.env.DB_STARTUP_TIMEOUTS === "0"
+      ? {}
+      : {
+          statement_timeout: num("DB_REPORT_STATEMENT_TIMEOUT_MS", 60_000),
+          lock_timeout: num("DB_LOCK_TIMEOUT_MS", 10_000),
+          idle_in_transaction_session_timeout: num("DB_IDLE_TX_TIMEOUT_MS", 60_000),
+        }),
+  },
+  types: { bigint: postgres.BigInt },
+});
+
+export const reportDb = drizzle(reportClient, { schema, logger: process.env.DB_LOG === "1" });
+
+export { schema, client, reportClient };
 export type Db = typeof db;

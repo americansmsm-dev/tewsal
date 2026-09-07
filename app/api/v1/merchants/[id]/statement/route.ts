@@ -22,9 +22,13 @@
 import { type NextRequest } from "next/server";
 import { sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
+// ⚠️ على الحوض الرئيسي بقصد. جرّبناه على حوض التقارير في القياس
+// فبقى بيستنى ورا تقارير بتاخد ٤٠ ثانية — من ٨٠٠ms لدقيقة. الكشف
+// محدود بتاجر واحد وبيمشي على فهارس، فمكانه هنا.
 import { db } from "@/server/db";
 import { formatEGP } from "@/lib/money";
 import { readMerchantBalance } from "@/server/services/ledger";
+import { resolvePeriod } from "@/server/services/reportPeriod";
 import { requireUser } from "@/server/http/context";
 import { ok, fail, handleError, notFound } from "@/server/http/respond";
 
@@ -56,14 +60,21 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     // 🔒 مكسب الشركة وتكلفة المندوب للمالية بس
     const canSeeProfit = FINANCE_ROLES.includes(ctx.user.role);
 
-    // فلتر الفترة (اختياري) — بيتطبّق على تاريخ القيد
+    // ⚠️ فترة **إجبارية** (افتراضي ٩٠ يوم). قبل كده الكشف كان
+    //    بيعيد قراءة دفتر التاجر **من أول يوم** في كل فتحة صفحة —
+    //    تاجر عليه ٥ آلاف أوردر = ٢٠ ألف سطر يومية كل مرة. القياس
+    //    على مليون شحنة: ٢٠ ثانية للكشف الواحد تحت الضغط.
+    //    دلوقتي التكلفة على قد الفترة مش على قد عمر التاجر.
     const url = new URL(req.url);
-    const from = validDate(url.searchParams.get("from"));
-    const to = validDate(url.searchParams.get("to"));
+    const period = resolvePeriod({
+      from: validDate(url.searchParams.get("from")),
+      to: validDate(url.searchParams.get("to")),
+      days: url.searchParams.get("days"),
+    });
     // نافذة زمنية على alias القيد je (بتتحط جوّه الاستعلامات اللي فيها je)
-    const win: SQL = sql`${from ? sql`AND je.entry_date >= ${from}::timestamptz` : sql``}${
-      to ? sql`AND je.entry_date <= ${to}::timestamptz` : sql``
-    }`;
+    const win: SQL = sql`AND je.entry_date >= ${period.from}::timestamptz AND je.entry_date < ${period.to}::timestamptz`;
+    // نفس النافذة على الشحنات (تاريخ الإنشاء)
+    const shipWin: SQL = sql`AND s.created_at >= ${period.from}::timestamptz AND s.created_at < ${period.to}::timestamptz`;
 
     // ⚠️ الأرصدة (الخانتين) مخزّنة ومتحدّثة مع كل قيد — مش متأثرة
     //    بفلتر الفترة. قراءة بحتة: مفيش ترانزاكشن كاتبة في GET.
@@ -132,35 +143,42 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       orders: number;
     }>(
       await db.execute(sql`
+        -- ⚠️ الترتيب هنا مقصود: بنبدأ من **حساب مستحقات التاجر ده**
+        --    (بضعة آلاف سطر بفهرس) ونطلع منه على قيوده، وبعدين
+        --    نقرا سطور القيود دي. الشكل القديم كان بيبدأ من كل
+        --    سطور الإيراد في الدفتر (٢.٨ مليون) ويفلتر بعدين —
+        --    ٩٠٠ms على مليون شحنة، وبيتقل مع الوقت.
+        WITH mp AS MATERIALIZED (
+          SELECT DISTINCT jl.entry_id
+          FROM journal_lines jl
+          JOIN accounts a ON a.id = jl.account_id
+            AND a.code = 'MERCHANT_PAYABLE' AND a.owner_id = ${merchantId}::uuid
+          JOIN journal_entries je ON je.id = jl.entry_id
+          WHERE true ${win}
+        ),
+        ml AS (
+          SELECT jl.shipment_id, jl.debit_p, jl.credit_p, a.type AS acc_type, a.code AS acc_code
+          FROM journal_lines jl
+          JOIN mp ON mp.entry_id = jl.entry_id
+          JOIN accounts a ON a.id = jl.account_id
+        )
         SELECT
           (SELECT COALESCE(SUM(s.cod_collected_p),0)::text
-             FROM shipments s WHERE s.merchant_id = ${merchantId}::uuid AND s.cod_collected_p IS NOT NULL) AS cod_collected,
+             FROM shipments s WHERE s.merchant_id = ${merchantId}::uuid
+              AND s.cod_collected_p IS NOT NULL ${shipWin}) AS cod_collected,
           -- كل إيراد الشركة من التاجر (رسوم الأوردرات + رسم التحصيل الأسبوعي عند التسوية)
-          (SELECT COALESCE(SUM(jl.credit_p - jl.debit_p),0)::text
-             FROM journal_lines jl
-             JOIN accounts a ON a.id = jl.account_id AND a.type = 'revenue'
-             JOIN journal_entries je ON je.id = jl.entry_id
-             WHERE jl.entry_id IN (
-               SELECT jl2.entry_id FROM journal_lines jl2
-               JOIN accounts a2 ON a2.id = jl2.account_id AND a2.code = 'MERCHANT_PAYABLE' AND a2.owner_id = ${merchantId}::uuid
-             ) ${win}) AS total_revenue,
-          -- إيراد الأوردرات وقت التسليم (بـ shipment_id) — الباقي = رسم التحصيل الأسبوعي
-          (SELECT COALESCE(SUM(jl.credit_p - jl.debit_p),0)::text
-             FROM journal_lines jl
-             JOIN accounts a ON a.id = jl.account_id AND a.type = 'revenue'
-             JOIN journal_entries je ON je.id = jl.entry_id
-             JOIN shipments s ON s.id = jl.shipment_id AND s.merchant_id = ${merchantId}::uuid
-             WHERE 1=1 ${win}) AS per_order_revenue,
+          (SELECT COALESCE(SUM(credit_p - debit_p),0)::text FROM ml WHERE acc_type = 'revenue') AS total_revenue,
+          -- إيراد الأوردرات وقت التسليم (السطر مربوط بشحنة) — الباقي = رسم التحصيل الأسبوعي
+          (SELECT COALESCE(SUM(credit_p - debit_p),0)::text
+             FROM ml WHERE acc_type = 'revenue' AND shipment_id IS NOT NULL) AS per_order_revenue,
           (SELECT COALESCE(SUM(cci.amount_p),0)::text
              FROM courier_commission_items cci
-             JOIN shipments s ON s.id = cci.shipment_id AND s.merchant_id = ${merchantId}::uuid) AS commission,
-          (SELECT COALESCE(SUM(jl.debit_p - jl.credit_p),0)::text
-             FROM journal_lines jl
-             JOIN accounts a ON a.id = jl.account_id AND a.code = 'COMPENSATION_EXPENSE'
-             JOIN journal_entries je ON je.id = jl.entry_id
-             JOIN shipments s ON s.id = jl.shipment_id AND s.merchant_id = ${merchantId}::uuid
-             WHERE 1=1 ${win}) AS compensation,
-          (SELECT COUNT(*)::int FROM shipments s WHERE s.merchant_id = ${merchantId}::uuid) AS orders
+             JOIN shipments s ON s.id = cci.shipment_id AND s.merchant_id = ${merchantId}::uuid
+             WHERE true ${shipWin}) AS commission,
+          (SELECT COALESCE(SUM(debit_p - credit_p),0)::text
+             FROM ml WHERE acc_code = 'COMPENSATION_EXPENSE') AS compensation,
+          (SELECT COUNT(*)::int FROM shipments s
+             WHERE s.merchant_id = ${merchantId}::uuid ${shipWin}) AS orders
       `)
     )[0];
 
@@ -196,7 +214,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     return ok({
       merchantId,
       canSeeProfit,
-      period: { from, to },
+      period: { from: period.from, to: period.to, days: period.days },
       // الخانتين (لحظية — مش متأثرة بالفترة)
       confirmed: formatEGP(balance.confirmedP),
       inCollection: formatEGP(balance.inCollectionP),

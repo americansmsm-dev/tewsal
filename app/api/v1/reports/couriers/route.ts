@@ -2,7 +2,8 @@
  * GET /api/v1/reports/couriers — سكوركارد أداء المناديب. مالية/عمليات.
  */
 import { type NextRequest } from "next/server";
-import { db } from "@/server/db";
+// ⚠️ حوض التقارير المنفصل — عشان تقرير تقيل مايجوّعش الشغل اليومي
+import { reportDb as db } from "@/server/db";
 import { courierScorecard } from "@/server/services/performance";
 import { requireRole } from "@/server/http/context";
 import { ok, handleError } from "@/server/http/respond";

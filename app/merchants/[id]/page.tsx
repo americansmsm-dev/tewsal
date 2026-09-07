@@ -51,6 +51,8 @@ interface Statement {
   inCollection: string;
   totalP: string;
   canSeeProfit: boolean;
+  /** الفترة اللي التفاصيل والملخص محسوبين عليها (الافتراضي ٩٠ يوم) */
+  period: { from: string; to: string; days: number };
   summary: Summary;
   lines: Line[];
 }
@@ -159,13 +161,32 @@ export default function MerchantStatementPage() {
             <div style={{ fontSize: "0.72rem", color: "var(--muted)", marginBottom: 3 }}>لتاريخ</div>
             <input type="date" className="input" value={to} onChange={(e) => setTo(e.target.value)} dir="ltr" style={{ padding: "0.35rem 0.5rem" }} />
           </div>
+          {/* اختصارات — الافتراضي ٩٠ يوم عشان الكشف مايقراش دفتر
+              التاجر من أول يوم في كل فتحة صفحة */}
+          {[30, 90, 180, 365].map((d) => (
+            <button
+              key={d}
+              className="btn btn-ghost"
+              onClick={() => {
+                const now = new Date();
+                const start = new Date(now.getTime() - d * 86400000);
+                setFrom(start.toISOString().slice(0, 10));
+                setTo(now.toISOString().slice(0, 10));
+              }}
+              style={{ padding: "0.35rem 0.7rem", fontSize: "0.78rem" }}
+            >
+              {d === 365 ? "سنة" : `${d} يوم`}
+            </button>
+          ))}
           {(from || to) && (
             <button className="btn btn-ghost" onClick={() => { setFrom(""); setTo(""); }} style={{ padding: "0.4rem 0.8rem", fontSize: "0.82rem" }}>
-              الكل
+              الافتراضي
             </button>
           )}
           <span style={{ fontSize: "0.75rem", color: "var(--muted)" }}>
-            {from || to ? "معروض حسب الفترة" : "من بداية التشغيل"}
+            {st?.period
+              ? `التفاصيل والملخص عن ${st.period.days} يوم — الرصيد لحظي مش متأثر بالفترة`
+              : "آخر ٩٠ يوم"}
           </span>
         </div>
 

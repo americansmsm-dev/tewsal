@@ -3,7 +3,8 @@
  * ميزان المراجعة + الأرباح والخسائر + الإيرادات حسب النوع. مالية.
  */
 import { type NextRequest } from "next/server";
-import { db } from "@/server/db";
+// ⚠️ حوض التقارير المنفصل — عشان تقرير تقيل مايجوّعش الشغل اليومي
+import { reportDb as db } from "@/server/db";
 import { trialBalance, profitAndLoss, revenueByType } from "@/server/services/accounting";
 import { requireRole } from "@/server/http/context";
 import { ok, handleError } from "@/server/http/respond";

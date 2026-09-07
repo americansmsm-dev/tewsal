@@ -20,6 +20,7 @@
  */
 import postgres from "postgres";
 import { spawnSync } from "node:child_process";
+import { buildAwb } from "../src/lib/awb";
 
 const arg = (k: string) => process.argv.find((a) => a.startsWith(`--${k}=`))?.split("=")[1];
 const has = (k: string) => process.argv.includes(`--${k}`);
@@ -112,6 +113,7 @@ async function main() {
     console.log(`
 📦 الشحنات — على دفعات ${fmt(CHUNK)}`);
     t = performance.now();
+    const year = new Date().getFullYear();
     const INSERT_SHIPMENTS = `
       INSERT INTO shipments (
         awb, merchant_id, recipient_name, recipient_phone, governorate_id, zone_id,
@@ -120,7 +122,7 @@ async function main() {
         created_at, updated_at, status_updated_at
       )
       SELECT
-        'LD' || lpad(($1::bigint + i)::text, 10, '0'),
+        ($11::text[])[i],
         ($2::uuid[])[1 + (($1::bigint + i) % $5::int)],
         'مستلم ' || i,
         '010' || lpad((($1::bigint + i) % 100000000)::text, 8, '0'),
@@ -155,10 +157,14 @@ async function main() {
     for (let done = 0; done < SHIPMENTS; done += CHUNK) {
       const size = Math.min(CHUNK, SHIPMENTS - done);
       const t0 = performance.now();
+      // ⚠️ بوالص **صالحة** برقم تحقق Luhn — لو ولّدنا أرقام عشوائية،
+      //    مسار التتبع بيرفضها قبل ما يوصل القاعدة، فالقياس بيبقى
+      //    بيقيس التحقق مش الاستعلام.
+      const awbs = Array.from({ length: size }, (_, k) => buildAwb(done + k + 1, year));
       await sql.unsafe(INSERT_SHIPMENTS, [
         done, merchantIds, courierIds, govIds,
         merchantIds.length, courierIds.length, govIds.length,
-        zoneIds, size, DAYS,
+        zoneIds, size, DAYS, awbs,
       ]);
       const pct = Math.round(((done + size) / SHIPMENTS) * 100);
       process.stdout.write(`   ${String(pct).padStart(3)}%  ${fmt(done + size).padStart(10)} شحنة   (${secs(t0)})
