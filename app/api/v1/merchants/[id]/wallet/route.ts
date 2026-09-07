@@ -3,9 +3,10 @@ import { type NextRequest } from "next/server";
 import { z } from "zod";
 import { db } from "@/server/db";
 import { walletBalance, depositToWallet } from "@/server/services/wallet";
-import { poundsToPiastres } from "@/lib/money";
+import { poundsToPiastres, formatEGP } from "@/lib/money";
 import { requireUser, requireRole } from "@/server/http/context";
 import { ok, fail, forbidden, handleError } from "@/server/http/respond";
+import { notifyWalletTopup } from "@/server/services/inappNotify";
 
 export const dynamic = "force-dynamic";
 const CASH_ROLES = ["super_admin", "branch_manager", "accountant"] as const;
@@ -47,6 +48,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const balance = await db.transaction((tx) =>
       depositToWallet(tx, { merchantId: id, amountP, method: parsed.data.method, actorUserId: ctx.user.userId })
     );
+    void (async () => {
+      try {
+        await notifyWalletTopup(db, {
+          merchantId: id,
+          amount: formatEGP(amountP),
+          balance: formatEGP(balance.availableP),
+        });
+      } catch (err) {
+        console.error("[notify] فشل إشعار شحن المحفظة:", err instanceof Error ? err.message : err);
+      }
+    })();
+
     return ok({
       ledgerP: balance.ledgerP.toString(),
       reservedP: balance.reservedP.toString(),

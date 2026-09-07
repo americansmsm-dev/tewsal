@@ -14,6 +14,7 @@ import { formatEGP } from "@/lib/money";
 import { runSettlement } from "@/server/services/settlement";
 import { requireRole, requireUser } from "@/server/http/context";
 import { ok, fail, handleError } from "@/server/http/respond";
+import { notifySettlementCreated } from "@/server/services/inappNotify";
 
 export const dynamic = "force-dynamic";
 
@@ -52,6 +53,19 @@ export async function POST(req: NextRequest) {
         actorUserId: ctx.user.userId,
       });
     });
+
+    // إشعار بعد الكوميت — الإشعار عمره ما يوقّف تسوية
+    void (async () => {
+      try {
+        await notifySettlementCreated(db, {
+          settlementId: result.settlementId, code: result.code,
+          merchantId: parsed.data.merchantId,
+          netAmount: formatEGP(result.netPayableP), itemCount: result.itemCount,
+        });
+      } catch (err) {
+        console.error("[notify] فشل إشعار إنشاء التسوية:", err instanceof Error ? err.message : err);
+      }
+    })();
 
     return ok(
       {

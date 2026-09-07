@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { Cairo } from "next/font/google";
 import "./globals.css";
 import { PwaRegister } from "./components/PwaRegister";
+import { PushPrompt } from "./components/PushPrompt";
 
 // خط Cairo — بيتحمّل محليًا مع البناء (يشتغل أوفلاين في الـ PWA)
 const cairo = Cairo({
@@ -31,6 +32,8 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       <body style={{ fontFamily: "var(--font-cairo), Cairo, system-ui, sans-serif" }}>
         <PwaRegister />
         {children}
+        {/* بانر تفعيل الإشعارات — بيظهر لو الجهاز ينفع بس */}
+        <PushPrompt />
       </body>
     </html>
   );

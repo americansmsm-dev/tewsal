@@ -5,6 +5,8 @@
  *  notification_templates — قوالب تتعدّل من الشاشة بدون نشر
  *  notification_log       — سجل كل إشعار بالتكلفة والحالة
  *  delivery_ratings       — تقييم العميل بعد التسليم (NPS)
+ *  push_subscriptions     — أجهزة المستخدم (فون + لاب + تاب)
+ *  notification_prefs     — إيقاف حدث/قناة لمستخدم بعينه
  *
  *  الحد اليومي لكل تاجر بيتحسب من السجل + إعداد عام.
  * ============================================================
@@ -19,6 +21,7 @@ import {
   timestamp,
   index,
   uniqueIndex,
+  primaryKey,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { merchants } from "./merchants";
@@ -100,4 +103,50 @@ export const deliveryRatings = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [uniqueIndex("delivery_ratings_shipment_uq").on(t.shipmentId)]
+);
+
+/**
+ * أجهزة المستخدم للإشعارات — **الواحد ليه كذا جهاز**.
+ * المفتاح الفريد هو الـendpoint اللي المتصفح بيديه، مش المستخدم.
+ * الاشتراك بيموت بصمت (شال التطبيق · مسح البيانات) — خدمة الدفع
+ * بترد ٤٠٤/٤١٠ ساعتها وإحنا بنشيل الصف.
+ */
+export const pushSubscriptions = pgTable(
+  "push_subscriptions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    endpoint: text("endpoint").notNull(),
+    p256dh: text("p256dh").notNull(),
+    auth: text("auth").notNull(),
+    userAgent: text("user_agent"),
+    /** اسم بيظهر للمستخدم: «فون سامسونج» / «لاب الشغل» */
+    deviceLabel: text("device_label"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull().defaultNow(),
+    /** أول فشل متتالي — بيتصفّر مع أول نجاح */
+    failedAt: timestamp("failed_at", { withTimezone: true }),
+  },
+  (t) => [
+    uniqueIndex("push_subscriptions_endpoint_uq").on(t.endpoint),
+    index("push_subscriptions_user_idx").on(t.userId),
+  ]
+);
+
+/**
+ * تفضيلات الإشعارات. **غياب الصف = مفعّل** — الصف بيتكتب بس لما
+ * المستخدم يقفل حاجة. كده أي حدث جديد بيشتغل لوحده من غير ما
+ * نلمس صفوف قديمة.
+ */
+export const notificationPrefs = pgTable(
+  "notification_prefs",
+  {
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    /** اسم الحدث أو '*' لكل الأحداث */
+    event: text("event").notNull(),
+    /** 'inapp' جوّه السيستم · 'push' على الجهاز */
+    channel: text("channel").notNull(),
+    enabled: boolean("enabled").notNull().default(true),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.event, t.channel] })]
 );

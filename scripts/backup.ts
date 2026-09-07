@@ -167,6 +167,22 @@ function buildSummary(file: BackupFile, v: VerifyResult | null, r2Key: string | 
   return lines.join("\n");
 }
 
+/**
+ * تنبيه للإدارة جوّه السيستم (وعلى أجهزتهم لو الدفع متظبط).
+ * **مابيرميش استثناء** — لو القاعدة مش شغّالة، تليجرام هو الحبل
+ * التاني، والباك أب نفسه مايتعطّلش عشان إشعار.
+ */
+async function notifyAdmins(event: string, titleAr: string, bodyAr: string): Promise<void> {
+  try {
+    const { db } = await import("../src/server/db");
+    const { notifyOps } = await import("../src/server/services/inappNotify");
+    await notifyOps(db, { event, titleAr, bodyAr });
+    await db.$client.end();
+  } catch (err) {
+    console.error("[notify] تنبيه الباك أب مافيش:", err instanceof Error ? err.message : err);
+  }
+}
+
 async function main() {
   const file = backup();
   const v = verify ? verifyRestore(file.path) : null;
@@ -179,7 +195,10 @@ async function main() {
   // لو البروفة فشلت، الخروج بخطأ + تنبيه — النسخة مش موثوقة
   if (v && !v.ok) {
     await tryTelegramAlert(`🚨 نسخة توصّل الاحتياطية فشلت في فحص الاسترجاع!\n${summary}`);
+    await notifyAdmins("backup_failed", "⚠️ النسخة الاحتياطية مش موثوقة", summary);
     process.exitCode = 1;
+  } else {
+    await notifyAdmins("backup_ok", "✅ النسخة الاحتياطية تمام", summary);
   }
 }
 
@@ -187,5 +206,6 @@ main().catch(async (err) => {
   const msg = err instanceof Error ? err.message : String(err);
   console.error("❌ فشل:", msg);
   await tryTelegramAlert(`🚨 فشل النسخ الاحتياطي لتوصّل\n🕓 ${nowCairo()}\n\n${msg}`);
+  await notifyAdmins("backup_failed", "🚨 النسخ الاحتياطي فشل", `${nowCairo()}\n${msg}`);
   process.exitCode = 1;
 });

@@ -10,6 +10,7 @@ import { poundsToPiastres, formatEGP } from "@/lib/money";
 import { recordHandover } from "@/server/services/handover";
 import { requireRole } from "@/server/http/context";
 import { ok, fail, handleError } from "@/server/http/respond";
+import { notifyHandoverConfirmed } from "@/server/services/inappNotify";
 
 export const dynamic = "force-dynamic";
 const FINANCE = ["super_admin", "branch_manager", "accountant"] as const;
@@ -50,6 +51,19 @@ export async function POST(req: NextRequest) {
         varianceNote: parsed.data.varianceNote ?? null,
       });
     });
+
+    void (async () => {
+      try {
+        await notifyHandoverConfirmed(db, {
+          handoverId: result.handoverId, code: result.code,
+          courierId: parsed.data.courierId,
+          amount: formatEGP(result.receivedP),
+          shortfall: result.varianceP < 0n ? formatEGP(-result.varianceP) : null,
+        });
+      } catch (err) {
+        console.error("[notify] فشل إشعار العهدة:", err instanceof Error ? err.message : err);
+      }
+    })();
 
     return ok(
       {

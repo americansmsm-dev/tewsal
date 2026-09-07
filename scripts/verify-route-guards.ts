@@ -42,6 +42,13 @@ const SELF_SERVICE = new Set([
   "app/api/v1/profile/avatar/route.ts",
   "app/api/v1/notifications/read/route.ts",
   "app/api/v1/auth/2fa/route.ts",
+  // إشعارات الجهاز: المستخدم بيدير **أجهزته وتفضيلاته هو بس**.
+  // الحماية جوّه الاستعلام نفسه (كل كتابة/حذف مقيّدة بـ user_id)،
+  // مش بقايمة أدوار — لأن كل الأدوار مسموح لها تدير أجهزتها.
+  "app/api/v1/push/subscribe/route.ts",
+  "app/api/v1/push/unsubscribe/route.ts",
+  "app/api/v1/push/devices/route.ts",
+  "app/api/v1/notifications/prefs/route.ts",
 ]);
 
 /**

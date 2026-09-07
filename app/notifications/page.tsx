@@ -9,6 +9,7 @@ import { AppHeader } from "../components/AppHeader";
 import { AppNav } from "../components/AppNav";
 import { useCurrentUser } from "../lib/useCurrentUser";
 import { apiCall } from "../lib/client";
+import { pushState, subscribeToPush, unsubscribeFromPush, type PushState } from "../lib/push";
 
 interface Notif {
   id: string;
@@ -58,6 +59,8 @@ export default function NotificationsPage() {
       <AppNav role={user.role} />
       <main style={{ maxWidth: 820, margin: "0 auto", padding: "1.25rem" }}>
         <h2 style={{ margin: "0 0 1rem", fontSize: "1.15rem" }}>الإشعارات</h2>
+
+        <DeviceSettings />
 
         {canSend && <Composer onSent={load} />}
 
@@ -171,6 +174,101 @@ function Composer({ onSent }: { onSent: () => void }) {
         <button className="btn btn-primary" onClick={send} disabled={busy}>{busy ? "جاري الإرسال..." : "إرسال"}</button>
         {msg && <span style={{ fontSize: "0.83rem", fontWeight: 600, color: msg.kind === "ok" ? "var(--color-success)" : "var(--color-danger)" }}>{msg.text}</span>}
       </div>
+    </div>
+  );
+}
+
+/**
+ * إعدادات الإشعارات على الجهاز.
+ *
+ * ⚠️ طلب الإذن **لازم** من ضغطة مستخدم — عشان كده زرار مش
+ *    تفعيل تلقائي. وعلى الآيفون/الآيباد لازم «إضافة إلى الشاشة
+ *    الرئيسية» الأول (شرط آبل).
+ */
+interface Device { id: string; device_label: string | null; user_agent: string | null; last_seen_at: string }
+
+function DeviceSettings() {
+  const [state, setState] = useState<PushState | null>(null);
+  const [devices, setDevices] = useState<Device[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [open, setOpen] = useState(false);
+
+  const refresh = useCallback(async () => {
+    setState(await pushState());
+    const r = await apiCall<{ devices: Device[] }>("GET", "/api/v1/push/devices");
+    if (r.ok && r.data) setDevices(r.data.devices);
+  }, []);
+  useEffect(() => { void refresh(); }, [refresh]);
+
+  async function enable() {
+    setBusy(true);
+    await subscribeToPush().catch(() => false);
+    setBusy(false);
+    void refresh();
+  }
+  async function disable() {
+    setBusy(true);
+    await unsubscribeFromPush().catch(() => false);
+    setBusy(false);
+    void refresh();
+  }
+  async function removeDevice(id: string) {
+    if (!confirm("تشيل الجهاز ده من الإشعارات؟")) return;
+    await apiCall("DELETE", `/api/v1/push/devices?id=${id}`);
+    void refresh();
+  }
+
+  if (state === null) return null;
+
+  const hint =
+    state === "unsupported" ? "المتصفح ده مابيدعمش إشعارات الجهاز. على الآيفون لازم تضيف التطبيق للشاشة الرئيسية الأول."
+    : state === "not-configured" ? "إشعارات الجهاز لسه مش متظبطة على السيرفر — الإشعارات جوّه السيستم شغّالة عادي."
+    : state === "denied" ? "الإشعارات مرفوضة من إعدادات المتصفح. افتح إعدادات الموقع واسمح بالإشعارات."
+    : state === "granted" ? "الجهاز ده مفعّل ✅"
+    : "مش مفعّل على الجهاز ده.";
+
+  return (
+    <div className="card" style={{ padding: "0.9rem 1.1rem", marginBottom: "1.25rem" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+        <span style={{ fontSize: "1.2rem" }}>🔔</span>
+        <div style={{ flex: 1, minWidth: 200 }}>
+          <div style={{ fontWeight: 700, fontSize: "0.92rem" }}>إشعارات الجهاز</div>
+          <div style={{ fontSize: "0.78rem", color: "var(--muted)", lineHeight: 1.6 }}>{hint}</div>
+        </div>
+        {state === "askable" && (
+          <button className="btn btn-primary" onClick={enable} disabled={busy} style={{ padding: "0.4rem 0.9rem", fontSize: "0.83rem" }}>
+            {busy ? "..." : "فعّل على الجهاز ده"}
+          </button>
+        )}
+        {state === "granted" && (
+          <button className="btn btn-ghost" onClick={disable} disabled={busy} style={{ padding: "0.4rem 0.9rem", fontSize: "0.83rem" }}>
+            {busy ? "..." : "وقّف على الجهاز ده"}
+          </button>
+        )}
+        {devices.length > 0 && (
+          <button className="btn btn-ghost" onClick={() => setOpen((v) => !v)} style={{ padding: "0.4rem 0.8rem", fontSize: "0.8rem" }}>
+            {open ? "إخفاء" : `أجهزتي (${devices.length})`}
+          </button>
+        )}
+      </div>
+
+      {open && devices.length > 0 && (
+        <div style={{ marginTop: 10, borderTop: "1px solid var(--border)", paddingTop: 8 }}>
+          {devices.map((d) => (
+            <div key={d.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "0.35rem 0", fontSize: "0.82rem" }}>
+              <span style={{ flex: 1 }}>
+                <b>{d.device_label ?? "جهاز"}</b>
+                <span style={{ color: "var(--muted)", fontSize: "0.74rem" }}>
+                  {" · آخر ظهور "}{new Date(d.last_seen_at).toLocaleString("ar-EG")}
+                </span>
+              </span>
+              <button className="btn btn-ghost" onClick={() => removeDevice(d.id)} style={{ padding: "0.2rem 0.6rem", fontSize: "0.75rem" }}>
+                شيل
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

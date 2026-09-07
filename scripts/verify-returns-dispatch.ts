@@ -49,7 +49,10 @@ async function main() {
     // مندوب بحساب دخول حقيقي (عشان نتأكد إنه شايفهم في تطبيقه)
     const cUser = `courier_rd_${stamp % 100000}`;
     const cRes = await admin("POST", "/api/v1/users", {
-      fullName: "مندوب المرتجعات", username: cUser, phone: `0100${stamp % 10000000}`,
+      // ⚠️ padStart ضروري — من غيره الرقم بيطلع ١٠ خانات أحيانًا
+      //    (على حسب الوقت) فالتحقق يرفضه والاختبار يفشل بالمزاج
+      fullName: "مندوب المرتجعات", username: cUser,
+      phone: `0100${String(stamp % 10000000).padStart(7, "0")}`,
       password: "Courier12345", role: "courier",
     });
     check("   إنشاء مندوب → 201", cRes.status, 201);
@@ -57,7 +60,8 @@ async function main() {
 
     // مستخدم مش مندوب (للفحص السلبي)
     const dRes = await admin("POST", "/api/v1/users", {
-      fullName: "مدخل بيانات", username: `de_rd_${stamp % 100000}`, phone: `0101${stamp % 10000000}`,
+      fullName: "مدخل بيانات", username: `de_rd_${stamp % 100000}`,
+      phone: `0101${String(stamp % 10000000).padStart(7, "0")}`,
       password: "Data12345678", role: "data_entry",
     });
     const nonCourierId = (dRes.json.user?.id ?? dRes.json.id) as string;

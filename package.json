@@ -23,10 +23,12 @@
     "verify:untested-core": "tsx scripts/verify-untested-core.ts",
     "verify:balance": "tsx scripts/verify-balance-incremental.ts",
     "verify:import-capacity": "tsx scripts/verify-import-capacity.ts",
+    "verify:push": "tsx scripts/verify-push.ts",
     "bench:balance": "tsx scripts/bench-balance.ts",
     "seed:load": "tsx scripts/seed-load.ts",
     "bench:load": "tsx scripts/bench-load.ts",
     "invariants": "tsx scripts/invariants.ts",
+    "vapid": "tsx scripts/generate-vapid.ts",
     "reconcile": "tsx scripts/reconcile-balances.ts",
     "reconcile:check": "tsx scripts/reconcile-balances.ts --check",
     "daily-report": "tsx scripts/daily-report.ts",
@@ -73,6 +75,7 @@
     "tailwind-merge": "^2.6.0",
     "tsx": "^4.19.2",
     "uuid": "^11.0.5",
+    "web-push": "^3.6.7",
     "zod": "^3.24.1"
   },
   "devDependencies": {
@@ -81,6 +84,7 @@
     "@types/node": "^22.10.6",
     "@types/react": "^19.0.7",
     "@types/react-dom": "^19.0.3",
+    "@types/web-push": "^3.6.4",
     "drizzle-kit": "^0.30.2",
     "eslint": "^9.18.0",
     "eslint-config-next": "^15.1.6",
