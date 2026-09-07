@@ -32,7 +32,8 @@ const ROLE_OPTIONS: { value: string; label: string }[] = [
 ];
 
 export default function NotificationsPage() {
-  const user = useCurrentUser();
+  // الإشعارات شاشة مشتركة — التاجر والمندوب لازم يوصلوها من الجرس
+  const user = useCurrentUser({ allowPortalRoles: true });
   const [items, setItems] = useState<Notif[]>([]);
   const [loading, setLoading] = useState(true);
 

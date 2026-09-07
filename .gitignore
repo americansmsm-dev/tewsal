@@ -17,3 +17,9 @@ tsconfig.tsbuildinfo
 pgdata/
 scratchpad/
 backups/
+
+# اختبارات المتصفح
+e2e/.auth/
+e2e/.accounts.json
+test-results/
+playwright-report/
